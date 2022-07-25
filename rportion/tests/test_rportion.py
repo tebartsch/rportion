@@ -5,6 +5,7 @@ import portion as P
 from portion.interval import open, closedopen, Atomic, empty, Interval
 
 from rportion import RPolygon
+from rportion.rportion import ropen, rempty, rclosedopen
 
 
 def print_mat(mat: list[list[Interval]]):
@@ -15,23 +16,25 @@ def print_mat(mat: list[list[Interval]]):
     print()
 
 
-def print_rpolygon(rpoly: RPolygon):
-    print(rpoly._x_boundaries)
-    print_mat(rpoly._used_y_ranges)
-    print_mat(rpoly._free_y_ranges)
-    print()
+def print_rpolygon(rpoly: RPolygon, show_trees=False):
+    if show_trees:
+        print("Data Trees")
+        print(rpoly._x_boundaries)
+        print_mat(rpoly._used_y_ranges)
+        print_mat(rpoly._free_y_ranges)
+    print("Maximal used rectangles")
     for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
-        print(i, "-->", e)
-    print()
+        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+    print("Maximal free rectangles")
     for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
-        print(i, "-->", e)
+        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
 
 
-class TestValidation(unittest.TestCase):
+class TestRPortion(unittest.TestCase):
     def __init__(self, *args, **kwargs):
-        super(TestValidation, self).__init__(*args, **kwargs)
+        super(TestRPortion, self).__init__(*args, **kwargs)
 
-    def test_RPolygon_maximum_rectangles(self):
+    def test_RPolygon_maximal_atomic_x_rectangles(self):
         # Add two finite (in x dimension) polygons.
         #        (1)          (2)         (3)         (4)           (5)
         #          +--+       +---+       +--+       +---+       +--+
@@ -48,11 +51,11 @@ class TestValidation(unittest.TestCase):
         poly = RPolygon()
         poly._add_atomic(Atomic(P.CLOSED, x1, x2, P.OPEN), y_interval_1)
         poly._add_atomic(Atomic(P.CLOSED, x3, x4, P.OPEN), y_interval_2)
-        self.assertListEqual(list(poly.maximal_used_rectangles()), [
+        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x2), y_interval_1),
             (closedopen(x3, x4), y_interval_2)
         ])
-        self.assertListEqual(list(poly.maximal_free_rectangles()), [
+        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x3),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -66,13 +69,13 @@ class TestValidation(unittest.TestCase):
         poly = RPolygon()
         poly._add_atomic(Atomic(P.CLOSED, x1, x3, P.OPEN), y_interval_1)
         poly._add_atomic(Atomic(P.CLOSED, x2, x4, P.OPEN), y_interval_2)
-        self.assertListEqual(list(poly.maximal_used_rectangles()), [
+        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1 & y_interval_2),
             (closedopen(x1, x3), y_interval_1),
             (closedopen(x2, x4), y_interval_2),
             (closedopen(x2, x3), y_interval_1 | y_interval_2)
         ])
-        self.assertListEqual(list(poly.maximal_free_rectangles()), [
+        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x2),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -85,11 +88,11 @@ class TestValidation(unittest.TestCase):
         poly = RPolygon()
         poly._add_atomic(Atomic(P.CLOSED, x1, x4, P.OPEN), y_interval_1)
         poly._add_atomic(Atomic(P.CLOSED, x2, x3, P.OPEN), y_interval_2)
-        self.assertListEqual(list(poly.maximal_used_rectangles()), [
+        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1),
             (closedopen(x2, x3), y_interval_1 | y_interval_2),
         ])
-        self.assertListEqual(list(poly.maximal_free_rectangles()), [
+        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x2),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -119,7 +122,7 @@ class TestValidation(unittest.TestCase):
         poly._add_atomic(Atomic(P.CLOSED, x2, x5, P.OPEN), y_interval_3)
         poly._add_atomic(Atomic(P.CLOSED, x1, x3, P.OPEN), y_interval_1)
         poly._add_atomic(Atomic(P.CLOSED, x4, x6, P.OPEN), y_interval_2)
-        self.assertListEqual(list(poly.maximal_used_rectangles()), [
+        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x5), closedopen(x4, x5)),
             (closedopen(x2, x6), closedopen(x2, x3)),
             (closedopen(x2, x5), closedopen(x2, x5)),
@@ -128,7 +131,7 @@ class TestValidation(unittest.TestCase):
             (closedopen(x2, x3), closedopen(x2, x6)),
             (closedopen(x4, x5), closedopen(x1, x5)),
         ])
-        self.assertListEqual(list(poly.maximal_free_rectangles()), [
+        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2 | y_interval_3)),
             (open(-P.inf, x4),
              Interval.from_atomic(P.OPEN, -P.inf, y_interval_3.lower, ~y_interval_3.left)),
@@ -251,4 +254,86 @@ class TestValidation(unittest.TestCase):
             [open(-P.inf, 2) | closedopen(4, P.inf),
              open(-P.inf, 2) | closedopen(4, P.inf)],
             [open(-P.inf, P.inf)]
+        ])
+        print_rpolygon(poly, True)
+
+    def test_RPolygon__sub_atomic(self):
+        # Removing an arbitrary rectangle from an empty polygon is effect less
+        # TODO
+
+        # Remove rectangle with empty x_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.CLOSED, 1, 0, P.OPEN)
+        y_interval = open(1, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[empty()]])
+
+        # Remove rectangle with empty y_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.OPEN, -P.inf, 1, P.OPEN)
+        y_interval = empty()
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[empty()]])
+
+        # Remove half planes from the whole plane
+        # # (a) Right half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.CLOSED, 0, P.inf, P.OPEN)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        # # (b) Left half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.OPEN, -P.inf, 0, P.CLOSED)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        # # (c) Upper half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        y_interval = open(-P.inf, 0)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
+        # # (d) Lower half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        y_interval = closedopen(0, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
+        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
+
+        # remove a single bounded rectangle from the plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = Atomic(P.CLOSED, 1, 3, P.OPEN)
+        y_interval = closedopen(2, 4)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, P.inf)],
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf)],
+            [open(-P.inf, P.inf)]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), closedopen(2, 4)],
+            [empty()]
         ])
