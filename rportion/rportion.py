@@ -137,13 +137,14 @@ def _update_x_boundaries_and_y_interval_triangles(
                 other_x_int_l_bound = RBoundary(other_x_interval.lower, ~other_x_interval.left)
                 other_y_int_r_bound = RBoundary(other_x_interval.upper, other_x_interval.right)
 
-                left_ind = n - 1 - x_boundaries.bisect_left(other_x_int_l_bound)
-                if l_bound < other_x_int_l_bound and (0 < left_ind < n - i):
+                left_ind = x_boundaries.bisect_left(other_x_int_l_bound) - 1
+                col = n - 1 - left_ind
+                if l_bound < other_x_int_l_bound and (0 < col < n - i):
                     # left = x_boundaries[left_ind]
                     adj_other_x_interval |= Interval.from_atomic(~l_bound.btype, l_bound.val,
                                                                  adj_other_x_interval.upper,
                                                                  adj_other_x_interval.right)
-                    y_int_left = y_interval_triangle_add[i][left_ind]
+                    y_int_left = y_interval_triangle_add[i][col]
                 else:
                     y_int_left = open(-P.inf, P.inf)
 

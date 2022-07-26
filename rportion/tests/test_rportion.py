@@ -144,6 +144,20 @@ class TestRPortion(unittest.TestCase):
             (closedopen(x6, P.inf), open(-P.inf, P.inf)),
         ])
 
+        # Test the following polygon addition sequence, where the third rectangle directly touches the second one.
+        #
+        #    x1   x2         x1   x2    x3   x4       x1   x2   x3   x4   x5
+        #    +----+          +----+     +----+        +----+    +---------+
+        #    |    |    ->    |    |     |    |    ->  |    |    |         |
+        #    +----+          +----+     +----+        +----+    +---------+
+        y_interval = closedopen(0, 1)
+        x1, x2, x3, x4, x5 = 1, 2, 3, 4, 5
+        poly = RPolygon()
+        poly._add_atomic(Atomic(P.CLOSED, x1, x2, P.OPEN), y_interval)
+        poly._add_atomic(Atomic(P.CLOSED, x3, x4, P.OPEN), y_interval)
+        poly._add_atomic(Atomic(P.CLOSED, x4, x5, P.OPEN), y_interval)
+        print_rpolygon(poly, show_trees=True)
+
         # Add three sectors in each six possible different orders and test if the result underlying
         # data structure of RPolygon stays the same.
         #
