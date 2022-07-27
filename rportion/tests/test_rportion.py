@@ -1,6 +1,8 @@
 import unittest
 from itertools import permutations, combinations
+import random
 
+import numpy as np
 import portion as P
 from portion.interval import open, closedopen, Atomic, empty, Interval
 
@@ -360,3 +362,105 @@ class TestRPortion(unittest.TestCase):
             [empty(), closedopen(2, 4)],
             [empty()]
         ])
+
+    def test_maximal_rectangles_extra(self):
+        n = 15  # Number of rectangles
+
+        # repeat test which generates random polygons multiply times.
+        for _ in range(3):
+
+            x_max = 16
+            max_x_len = 2
+            y_max = 4
+            max_y_len = 2
+
+            rec_list = []
+            for i in range(n):
+                x_left = random.randint(0, x_max - max_x_len)
+                x_right = x_left + random.randint(1, max_x_len)
+                y_left = random.randint(0, y_max - max_y_len)
+                y_right = y_left + random.randint(1, max_y_len)
+                rec_list.append((x_left, x_right, y_left, y_right))
+
+            arr = np.zeros((y_max, x_max))
+            poly = rempty()
+
+            for i, r in enumerate(rec_list):
+                arr[r[2]:r[3], r[0]:r[1]] = 1
+                poly |= rclosedopen(*r)
+
+            arr_used_rectangles = set(get_maximal_rectangles_from_numpy(arr == 0))
+            arr_free_rectangles = set(get_maximal_rectangles_from_numpy(arr))
+
+            poly_used_rectangles = set([
+                (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
+                 r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
+                for r in poly.maximal_used_rectangles()
+            ])
+            poly_free_rectangles = set([
+                (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
+                 r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
+                for r in (poly | (~ropen(0, x_max, 0, y_max))).maximal_free_rectangles()])
+
+            def matrix_to_str(usage_arr: np.array):
+                msg = ""
+                msg += "   "
+                for i in range(0, usage_arr.shape[1], 3):
+                    msg += f"{i:<3}"
+                msg += "\n"
+                msg += "  +" + ("-" * usage_arr.shape[1]) + "+\n"
+                for i in range(usage_arr.shape[0]):
+                    msg += f"{i:>2}|"
+                    for j in range(usage_arr.shape[1]):
+                        msg += "x" if usage_arr[i, j] else " "
+                    msg += "|\n"
+                msg += "  +" + ("-" * usage_arr.shape[1]) + "+"
+                msg += "\n"
+                return msg
+
+            def difference_string(usage_arr: np.ndarray, rectangles: set[tuple[int, int, int, int]]):
+                msg = "Used areas\n"
+                msg += matrix_to_str(usage_arr)
+                msg += "\n"
+                msg += "Rectangles\n"
+                for x0, x1, y0, y1 in rectangles:
+                    r_arr = np.zeros(usage_arr.shape)
+                    r_arr[y0:y1, x0:x1] = 1
+                    msg += matrix_to_str(r_arr) + "\n"
+                    msg += "\n"
+                return msg
+
+            diff_used_1 = poly_used_rectangles - arr_used_rectangles
+            if diff_used_1 != set():
+                msg = ("The class RPolygon provided a used rectangle which has not been found by "
+                       "the array algorithm.\n")
+                msg += difference_string(arr, diff_used_1)
+                msg += f"The following rectangles have been added in the given order: {rec_list}."
+                self.fail(msg)
+
+            diff_used_2 = arr_used_rectangles - poly_used_rectangles
+            if diff_used_2 != set():
+                msg = ("The class RPolygon failed to provide a used rectangle which has been found by "
+                       "the array algorithm.\n")
+                msg += difference_string(arr, diff_used_2)
+                msg += f"The following rectangles have been added in the given order: {rec_list}."
+                self.fail(msg)
+
+            diff_free_1 = poly_free_rectangles - arr_free_rectangles
+            if diff_free_1 != set():
+                msg = "The class RPolygon provided a used rectangle which has not been found by" \
+                      "the array algorithm.\n"
+                msg += difference_string(arr, diff_free_1)
+                msg += f"The following rectangles have been added in the given order: {rec_list}."
+                self.fail(msg)
+
+            diff_free_2 = arr_free_rectangles - poly_free_rectangles
+            if diff_free_2 != set():
+                msg = "The class RPolygon failed to provide a used rectangle which has been found by" \
+                      "the array algorithm.\n"
+                msg += f"The following rectangles have been added in the given order: {rec_list}."
+                msg += difference_string(arr, diff_free_2)
+                self.fail(msg)
+
+            print("Tested maximal rectangle calculation for the following poylgon.")
+            print(matrix_to_str(arr))
