@@ -89,6 +89,85 @@ def _extend_ranges_mat(mat: list[list[Interval]],
         mat[row].insert(n - index, prev_y_int)
 
 
+def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[list[Interval]]) -> bool:
+    """
+    Test if the given bound can be removed from y_interval_triangle.
+
+    :bound_index int:
+    :y_interval_triangle list[list[Interval]]:
+
+    For the following triangle the boundary 4 can be pruned, because
+      - the y-intervals of row (Y) are contained in the corresponding
+        y-intervals of row (X), and
+      - the y-intervals of column (N) are contained in the corresponding
+        y-intervals of column (M).
+
+                              (M)    (N)
+                   |  +inf     5      4     3
+            -------+-------------------------------
+             -inf  |   ()     ()     ()    ()
+        (X)     3  |   ()    [0,1)  [0,1)
+        (Y)     4  |   ()    [0,1)
+                5  |   ()
+
+    In contrast this triangle the boundary 4 cannot be pruned.
+
+                                  (M)    (N)
+                   |  +inf     3      4     5
+            -------+-------------------------------
+             -inf  |   ()     ()     ()    ()
+        (X)     3  |   ()    [0,1)  [0,1)
+        (Y)     4  |   ()    [0,2)
+                5  |   ()
+    """
+    n = len(y_interval_triangle)
+    if bound_index == 0 or bound_index == n:
+        return False
+
+    tr = y_interval_triangle
+
+    i = bound_index
+    cols = range(0, n - i)
+    for j in cols:
+        if not tr[i - 1][j].contains(tr[i][j]):
+            return False
+
+    j = n - bound_index
+    rows = range(0, i)
+    for i in rows:
+        if not tr[i][j - 1].contains(tr[i][j]):
+            return False
+
+    return True
+
+
+def _remove_boundary(bound_index: int, y_interval_triangle: list[list[Interval]]):
+    """
+    Remove row and columns from y_interval_triangle specified by bound_index.
+
+    :bound_index int:
+    :y_interval_triangle list[list[Interval]]: Data
+
+    This function is meant to be performed if the boundary is prunable, see function
+    `_y_interval_triangle_prunable`.
+
+    I.e. for bound_index == 1 we get
+
+             old y-interval-triangle                         new y-interval-triangle
+
+               |  +inf     5      4     3                       |  +inf     5      3
+        -------+----------------------------             -------+----------------------
+         -inf  |   ()     ()     ()    ()                  -inf |   ()     ()      ()
+            3  |   ()    [0,1)  [0,1)           ==>          3  |   ()    [0,1)
+            4  |   ()    [0,1)                               5  |   ()
+            5  |   ()
+    """
+    n = len(y_interval_triangle)
+    for i in range(bound_index):
+        y_interval_triangle[i].pop(n - bound_index)
+    y_interval_triangle.pop(bound_index)
+
+
 def _update_x_boundaries_and_y_interval_triangles(
         x_boundaries: SortedList[RBoundary],
         y_interval_triangle_add: list[list[Interval]],
@@ -111,13 +190,13 @@ def _update_x_boundaries_and_y_interval_triangles(
     if other_x_interval.empty or other_y_interval.empty:
         return
 
-    # Left and right boundary of the x_interval to be added
+    # Left and right boundary of other_x_atom
     l_bound_type = ~other_x_atom.left if other_x_atom.lower != -P.inf else P.OPEN
     x_b_left = RBoundary(other_x_atom.lower, l_bound_type)
     r_bound_type = other_x_atom.right if other_x_atom.upper != P.inf else P.OPEN
     x_b_right = RBoundary(other_x_atom.upper, r_bound_type)
 
-    # (a) Add new rows/columns to y_interval_triangle and self._free_y_ranges
+    # (a) Add new rows/columns to the y-interval-triangles and the x-boundaries
     if x_b_left not in x_boundaries:
         _extend_ranges_mat(y_interval_triangle_add, x_boundaries, x_b_left)
         _extend_ranges_mat(y_interval_triangle_sub, x_boundaries, x_b_left)
@@ -127,7 +206,7 @@ def _update_x_boundaries_and_y_interval_triangles(
         _extend_ranges_mat(y_interval_triangle_sub, x_boundaries, x_b_right)
         x_boundaries.add(x_b_right)
 
-    # (b) Update the y interval in y_interval_triangle and self._free_y_ranges
+    # (b) Update y_interval_triangle_add
     n = len(y_interval_triangle_add)
     for i in range(n):
         for j in range(n - i):
@@ -146,7 +225,6 @@ def _update_x_boundaries_and_y_interval_triangles(
                 left_ind = x_boundaries.bisect_left(other_x_int_l_bound)
                 col = n - left_ind
                 if l_bound < other_x_int_l_bound and (0 < col < n - i):
-                    # left = x_boundaries[left_ind]
                     adj_other_x_interval |= Interval.from_atomic(~l_bound.btype, l_bound.val,
                                                                  adj_other_x_interval.upper,
                                                                  adj_other_x_interval.right)
@@ -166,6 +244,7 @@ def _update_x_boundaries_and_y_interval_triangles(
                 if adj_other_x_interval.contains(x_interval):
                     y_interval_triangle_add[i][j] |= y_int_left & other_y_interval & y_int_right
 
+    # (c) Update y_interval_triangle_sub
     n = len(y_interval_triangle_sub)
     for i in range(n):
         for j in range(n - i):
@@ -174,6 +253,31 @@ def _update_x_boundaries_and_y_interval_triangles(
             x_interval = Interval.from_atomic(l_bound.btype, l_bound.val, r_bound.val, r_bound.btype)
             if other_x_interval.overlaps(x_interval):
                 y_interval_triangle_sub[i][j] -= other_y_interval
+
+    # (d) Prune the y-interval-triangles if possible
+    l_ind = x_boundaries.bisect_left(x_b_left)
+
+    l_prunable_add = _y_interval_triangle_prunable(l_ind, y_interval_triangle_add)
+    l_prunable_sub = _y_interval_triangle_prunable(l_ind, y_interval_triangle_sub)
+    assert l_prunable_add == l_prunable_sub, (
+        "If one y-interval-triangle is prunable then the other should be too"
+    )
+    if l_prunable_add and l_prunable_sub:
+        _remove_boundary(l_ind, y_interval_triangle_add)
+        _remove_boundary(l_ind, y_interval_triangle_sub)
+        x_boundaries.remove(x_b_left)
+
+    r_ind = x_boundaries.bisect_left(x_b_right)
+
+    r_prunable_add = _y_interval_triangle_prunable(r_ind, y_interval_triangle_add)
+    r_prunable_sub = _y_interval_triangle_prunable(r_ind, y_interval_triangle_sub)
+    assert r_prunable_add == r_prunable_sub, (
+        "If one y-interval-triangle is prunable then the other should be too"
+    )
+    if r_prunable_add and r_prunable_sub:
+        _remove_boundary(r_ind, y_interval_triangle_add)
+        _remove_boundary(r_ind, y_interval_triangle_sub)
+        x_boundaries.remove(x_b_right)
 
 
 def _traverse_diagonally(boundaries: list[RBoundary],
@@ -266,7 +370,7 @@ class RPolygon:
                 break
         else:
             r_int += 1
-        l_bound = self._x_boundaries[n-l_int]
+        l_bound = self._x_boundaries[n - l_int]
         r_bound = self._x_boundaries[r_int]
         return Interval.from_atomic(~l_bound.btype, l_bound.val,
                                     r_bound.val, r_bound.btype)
