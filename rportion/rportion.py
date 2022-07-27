@@ -168,43 +168,34 @@ def _remove_boundary(bound_index: int, y_interval_triangle: list[list[Interval]]
     y_interval_triangle.pop(bound_index)
 
 
-def _update_x_boundaries_and_y_interval_triangles(
+def _add_rectangle_to_interval_tree(
         x_boundaries: SortedList[RBoundary],
-        y_interval_triangle_add: list[list[Interval]],
-        y_interval_triangle_sub: list[list[Interval]],
+        y_interval_triangle: list[list[Interval]],
         other_x_atom: Interval, other_y_interval: Interval):
     """
-    Update
-       - y_interval_triangle_add
-                such that it represents the union of the old polygon and the one provided as parameters
-       - y_interval_triangle_sub
-                such that it represents the difference of the old polygon and the one provided as paramters
+    Update y_interval_triangle such that it represents the union of the old polygon and the one
+    provided in the parameters.
 
     :x_boundaries SortedList[RBoundary]:
-    :y_interval_triangle_add list[list[Interval]]:
-    :y_interval_triangle_sub list[list[Interval]]:
+    :y_interval_triangle list[list[Interval]]:
     :new_x_atom Atomic, new_y_interval: Interval:
     """
     assert other_x_atom.atomic
 
     # Left and right boundary of other_x_atom
-    l_bound_type = ~other_x_atom.left
-    x_b_left = RBoundary(other_x_atom.lower, l_bound_type)
-    r_bound_type = other_x_atom.right
-    x_b_right = RBoundary(other_x_atom.upper, r_bound_type)
+    x_b_left = RBoundary(other_x_atom.lower, ~other_x_atom.left)
+    x_b_right = RBoundary(other_x_atom.upper, other_x_atom.right)
 
     # (a) Add new rows/columns to the y-interval-triangles and the x-boundaries
     if x_b_left not in x_boundaries:
-        _extend_ranges_mat(y_interval_triangle_add, x_boundaries, x_b_left)
-        _extend_ranges_mat(y_interval_triangle_sub, x_boundaries, x_b_left)
+        _extend_ranges_mat(y_interval_triangle, x_boundaries, x_b_left)
         x_boundaries.add(x_b_left)
     if x_b_right not in x_boundaries:
-        _extend_ranges_mat(y_interval_triangle_add, x_boundaries, x_b_right)
-        _extend_ranges_mat(y_interval_triangle_sub, x_boundaries, x_b_right)
+        _extend_ranges_mat(y_interval_triangle, x_boundaries, x_b_right)
         x_boundaries.add(x_b_right)
 
     # (b) Update y_interval_triangle_add
-    n = len(y_interval_triangle_add)
+    n = len(y_interval_triangle)
     for i in range(n):
         for j in range(n - i):
             l_bound = x_boundaries[i]
@@ -212,7 +203,7 @@ def _update_x_boundaries_and_y_interval_triangles(
             x_interval = Interval.from_atomic(~l_bound.btype, l_bound.val, r_bound.val, r_bound.btype)
 
             if other_x_atom.contains(x_interval):
-                y_interval_triangle_add[i][j] |= other_y_interval
+                y_interval_triangle[i][j] |= other_y_interval
             else:
                 adj_other_x_interval = other_x_atom
 
@@ -225,7 +216,7 @@ def _update_x_boundaries_and_y_interval_triangles(
                     adj_other_x_interval |= Interval.from_atomic(~l_bound.btype, l_bound.val,
                                                                  adj_other_x_interval.upper,
                                                                  adj_other_x_interval.right)
-                    y_int_left = y_interval_triangle_add[i][col]
+                    y_int_left = y_interval_triangle[i][col]
                 else:
                     y_int_left = open(-P.inf, P.inf)
 
@@ -234,46 +225,76 @@ def _update_x_boundaries_and_y_interval_triangles(
                     adj_other_x_interval |= Interval.from_atomic(adj_other_x_interval.left,
                                                                  adj_other_x_interval.lower,
                                                                  r_bound.val, r_bound.btype)
-                    y_int_right = y_interval_triangle_add[right_ind][j]
+                    y_int_right = y_interval_triangle[right_ind][j]
                 else:
                     y_int_right = open(-P.inf, P.inf)
 
                 if adj_other_x_interval.contains(x_interval):
-                    y_interval_triangle_add[i][j] |= y_int_left & other_y_interval & y_int_right
+                    y_interval_triangle[i][j] |= y_int_left & other_y_interval & y_int_right
 
-    # (c) Update y_interval_triangle_sub
-    n = len(y_interval_triangle_sub)
+    # (c) Prune the y-interval-triangles if possible
+    l_ind = x_boundaries.bisect_left(x_b_left)
+    l_prunable = _y_interval_triangle_prunable(l_ind, y_interval_triangle)
+    if l_prunable:
+        _remove_boundary(l_ind, y_interval_triangle)
+        x_boundaries.remove(x_b_left)
+
+    r_ind = x_boundaries.bisect_left(x_b_right)
+    r_prunable = _y_interval_triangle_prunable(r_ind, y_interval_triangle)
+    if r_prunable:
+        _remove_boundary(r_ind, y_interval_triangle)
+        x_boundaries.remove(x_b_right)
+
+
+def _sub_rectangle_to_interval_tree(
+        x_boundaries: SortedList[RBoundary],
+        y_interval_triangle: list[list[Interval]],
+        other_x_atom: Interval, other_y_interval: Interval):
+    """
+    Update y_interval_triangle such that it represents the difference of the old polygon and the one provided
+    in the parameters.
+
+    :x_boundaries SortedList[RBoundary]:
+    :y_interval_triangle list[list[Interval]]:
+    :new_x_atom Atomic, new_y_interval: Interval:
+    """
+    assert other_x_atom.atomic
+
+    # Left and right boundary of other_x_atom
+    l_bound_type = ~other_x_atom.left
+    x_b_left = RBoundary(other_x_atom.lower, l_bound_type)
+    r_bound_type = other_x_atom.right
+    x_b_right = RBoundary(other_x_atom.upper, r_bound_type)
+
+    # (a) Add new rows/columns to the y-interval-triangles and the x-boundaries
+    if x_b_left not in x_boundaries:
+        _extend_ranges_mat(y_interval_triangle, x_boundaries, x_b_left)
+        x_boundaries.add(x_b_left)
+    if x_b_right not in x_boundaries:
+        _extend_ranges_mat(y_interval_triangle, x_boundaries, x_b_right)
+        x_boundaries.add(x_b_right)
+
+    # (b) Update y_interval_triangle
+    n = len(y_interval_triangle)
     for i in range(n):
         for j in range(n - i):
             l_bound = ~x_boundaries[i]
             r_bound = x_boundaries[-j - 1]
             x_interval = Interval.from_atomic(l_bound.btype, l_bound.val, r_bound.val, r_bound.btype)
             if other_x_atom.overlaps(x_interval):
-                y_interval_triangle_sub[i][j] -= other_y_interval
+                y_interval_triangle[i][j] -= other_y_interval
 
-    # (d) Prune the y-interval-triangles if possible
+    # (c) Prune the y-interval-triangles if possible
     l_ind = x_boundaries.bisect_left(x_b_left)
-
-    l_prunable_add = _y_interval_triangle_prunable(l_ind, y_interval_triangle_add)
-    l_prunable_sub = _y_interval_triangle_prunable(l_ind, y_interval_triangle_sub)
-    assert l_prunable_add == l_prunable_sub, (
-        "If one y-interval-triangle is prunable then the other should be too"
-    )
-    if l_prunable_add and l_prunable_sub:
-        _remove_boundary(l_ind, y_interval_triangle_add)
-        _remove_boundary(l_ind, y_interval_triangle_sub)
+    l_prunable = _y_interval_triangle_prunable(l_ind, y_interval_triangle)
+    if l_prunable:
+        _remove_boundary(l_ind, y_interval_triangle)
         x_boundaries.remove(x_b_left)
 
     r_ind = x_boundaries.bisect_left(x_b_right)
-
-    r_prunable_add = _y_interval_triangle_prunable(r_ind, y_interval_triangle_add)
-    r_prunable_sub = _y_interval_triangle_prunable(r_ind, y_interval_triangle_sub)
-    assert r_prunable_add == r_prunable_sub, (
-        "If one y-interval-triangle is prunable then the other should be too"
-    )
-    if r_prunable_add and r_prunable_sub:
-        _remove_boundary(r_ind, y_interval_triangle_add)
-        _remove_boundary(r_ind, y_interval_triangle_sub)
+    r_prunable = _y_interval_triangle_prunable(r_ind, y_interval_triangle)
+    if r_prunable:
+        _remove_boundary(r_ind, y_interval_triangle)
         x_boundaries.remove(x_b_right)
 
 
@@ -321,14 +342,11 @@ def _traverse_diagonally(boundaries: list[RBoundary],
         next_parent_y_intervals.append(empty())
 
 
-class RPolygon:
+class RectPolygon:
     """
     This class represents an orthogonal Polygon.
-
-    An orthogonal polygon is a union of rectangles. A rectangle is represented by two
-    intervals of the `portion`-library.
     """
-    __slots__ = ("_x_boundaries", "_used_y_ranges", "_free_y_ranges")
+    __slots__ = ("_x_boundaries", "_y_intervals")
 
     def __init__(self):
         # [-inf, b1, b2, ..., bn, inf]
@@ -347,40 +365,57 @@ class RPolygon:
         #      b2 |         ___/
         #       : |      __/
         #      bn |_____/
-        self._used_y_ranges: list[list[Interval]] = [[empty()]]
-        self._free_y_ranges: list[list[Interval]] = [[open(-P.inf, P.inf)]]
+        self._y_intervals: list[list[Interval]] = [[empty()]]
 
     @property
-    def enclosing_x_interval(self):
+    def enclosing_intervals(self) -> tuple[Interval, Interval]:
+        return self.enclosing_x_interval, self.enclosing_y_interval
+
+    @property
+    def enclosing_x_interval(self) -> Interval:
         """
         smallest y_interval enclosing the y-dimension of the polygon.
         """
-        n = len(self._free_y_ranges[0])
-        for l_int in range(0, n):
-            if self._free_y_ranges[0][l_int] == open(-P.inf, P.inf):
+        n = len(self._y_intervals)
+
+        for i in range(n):
+            j = n - 1 - i
+            if not self._y_intervals[i][j].empty:
                 break
         else:
-            l_int += 1
-        n = len(self._free_y_ranges)
-        for r_int in range(0, n):
-            if self._free_y_ranges[r_int][0] == open(-P.inf, P.inf):
+            i += 1
+
+        l_ind = i
+
+
+        for j in range(n):
+            i = n - 1 - j
+            if not self._y_intervals[i][j].empty:
                 break
         else:
-            r_int += 1
-        l_bound = self._x_boundaries[n - l_int]
-        r_bound = self._x_boundaries[r_int]
+            j += 1
+
+        r_ind = j
+
+        l_bound = self._x_boundaries[l_ind]
+        r_bound = self._x_boundaries[-r_ind-1]
         return Interval.from_atomic(~l_bound.btype, l_bound.val,
                                     r_bound.val, r_bound.btype)
 
     @property
-    def enclosing_y_interval(self):
+    def enclosing_y_interval(self) -> Interval:
         """
         smallest y_interval enclosing the y-dimension of the polygon.
         """
-        return ~self._free_y_ranges[0][0]
+        n = len(self._y_intervals)
+        interval = empty()
+        for i in range(n):
+            for j in range(n-i):
+                interval |= self._y_intervals[i][j]
+        return interval
 
     @classmethod
-    def from_interval_product(cls, x_interval: Interval, y_interval: Interval) -> 'RPolygon':
+    def from_intervals(cls, x_interval: Interval, y_interval: Interval) -> 'RectPolygon':
         """
         Create a (simple) rectangular polygon as the product of two intervals.
 
@@ -392,7 +427,7 @@ class RPolygon:
         instance._add_interval_product(x_interval, y_interval)
         return instance
 
-    def maximal_used_rectangles(self) -> Iterator['RPolygon']:
+    def maximal_rectangles(self) -> Iterator['RectPolygon']:
         """
         Yield all maximal rectangle which are contained in this polygon.
 
@@ -400,69 +435,49 @@ class RPolygon:
 
         :return: Iterator[RPolygon]:
         """
-        for x_atom, y_interval in self._maximal_used_atomic_x_rectangles():
+        for x_atom, y_interval in self._maximal_atomic_x_rectangles():
             for y_atom in y_interval:
                 if y_atom.empty:
                     continue
-                yield self.__class__.from_interval_product(x_atom, y_atom)
+                yield self.__class__.from_intervals(x_atom, y_atom)
 
     def __copy__(self):
         poly_copy = self.__class__()
         poly_copy._x_boundaries = SortedList(copy(b) for b in self._x_boundaries)
-        poly_copy._used_y_ranges = [
+        poly_copy._y_intervals = [
             [y_int for y_int in row]
-            for row in self._used_y_ranges
-        ]
-        poly_copy._free_y_ranges = [
-            [y_int for y_int in row]
-            for row in self._free_y_ranges
+            for row in self._y_intervals
         ]
         return poly_copy
 
-    def _maximal_used_atomic_x_rectangles(self) -> Iterator[tuple[Interval, Interval]]:
-        return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges)
-
-    def maximal_free_rectangles(self) -> Iterator['RPolygon']:
-        """
-        Yield all maximal rectangle which do not intersect the polygon uniquely.
-
-        A rectangle is called maximal if it is not contained in any larger rectangle not intersecting this polygon.
-
-        :return: Iterator['RPolygon']:
-        """
-        for x_atom, y_interval in self._maximal_free_atomic_x_rectangles():
-            for y_atom in y_interval:
-                if y_atom.empty:
-                    continue
-                yield self.__class__.from_interval_product(x_atom, y_atom)
-
-    def _maximal_free_atomic_x_rectangles(self) -> Iterator[tuple[Interval, Interval]]:
-        return _traverse_diagonally(list(self._x_boundaries), self._free_y_ranges)
-
-    def __or__(self, other) -> 'RPolygon':
+    def __or__(self, other) -> 'RectPolygon':
         rec_copy = copy(self)
-        for x_interval, y_interval in other._maximal_used_atomic_x_rectangles():
+        for x_interval, y_interval in other._maximal_atomic_x_rectangles():
             rec_copy._add_interval_product(x_interval, y_interval)
         return rec_copy
 
-    def __sub__(self, other) -> 'RPolygon':
-        poly_copy = copy(self)
-        for x_interval, y_interval in other._maximal_used_atomic_x_rectangles():
-            poly_copy._sub_interval_product(x_interval, y_interval)
-        return poly_copy
+    def __sub__(self, other) -> 'RectPolygon':
+        rec_copy = copy(self)
+        for rec in other.maximal_rectangles():
+            rec_copy._sub_interval_product(
+                rec.enclosing_x_interval,
+                rec.enclosing_y_interval)
+        return rec_copy
 
-    def __invert__(self) -> 'RPolygon':
-        poly_copy = copy(self)
-        poly_copy._invert()
-        return poly_copy
+    def __invert__(self) -> 'RectPolygon':
+        inverted = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        for x_atom, y_interval in self._maximal_atomic_x_rectangles():
+            if x_atom.empty:
+                continue
+            inverted._sub_interval_product(x_atom, y_interval)
+        return inverted
 
-    def __and__(self, other) -> 'RPolygon':
+    def __and__(self, other) -> 'RectPolygon':
         return self - (~other)
 
-    def _invert(self):
-        temp = self._used_y_ranges
-        self._used_y_ranges = self._free_y_ranges
-        self._free_y_ranges = temp
+
+    def _maximal_atomic_x_rectangles(self) -> Iterator[tuple[Interval, Interval]]:
+        return _traverse_diagonally(list(self._x_boundaries), self._y_intervals)
 
     def _add_interval_product(self, x_interval: Interval, y_interval: Interval):
         if not x_interval.empty and not y_interval.empty:
@@ -476,41 +491,134 @@ class RPolygon:
 
     def _add_atomic(self, add_x_atom: Interval, add_y_interval: Interval):
         """
-        Update self._used_y_ranges and self._free_y_ranges such that they represent the union of the old rectangular
+        Update self._y_intervals such that they represent the union of the old rectangular
         polygon and the provided interval product.
         """
-        _update_x_boundaries_and_y_interval_triangles(
+        _add_rectangle_to_interval_tree(
             self._x_boundaries,
-            self._used_y_ranges,
-            self._free_y_ranges,
+            self._y_intervals,
             add_x_atom,
             add_y_interval,
         )
 
     def _sub_atomic(self, sub_x_atom: Interval, sub_y_interval: Interval):
         """
-        Update self._used_y_ranges and self._free_y_ranges such that they represent the set difference of the old
+        Update self._y_intervals such that they represent the set difference of the old
         rectangular polygon and the provided interval product.
         """
-        _update_x_boundaries_and_y_interval_triangles(
+        _sub_rectangle_to_interval_tree(
             self._x_boundaries,
-            self._free_y_ranges,
-            self._used_y_ranges,
+            self._y_intervals,
             sub_x_atom,
             sub_y_interval,
         )
 
 
-def rempty() -> RPolygon:
+class RectBisection:
+    """
+    This class represents the bisection of the plane as it is induced by a rectilinear polygon.
+    """
+
+    __slots__ = ("used_polygon", "free_polygon")
+
+    def __init__(self):
+        self.used_polygon = RectPolygon()
+        self.free_polygon = RectPolygon.from_intervals(
+            open(-P.inf, P.inf),
+            open(-P.inf, P.inf)
+        )
+
+    @classmethod
+    def from_interval_product(cls, x_interval: Interval, y_interval: Interval) -> 'RectBisection':
+        """
+        Create a (simple) rectangular polygon as the product of two intervals.
+
+        :param x_interval:
+        :param y_interval:
+        :return RPolygon:
+        """
+        instance = cls()
+        instance.used_polygon |= RectPolygon.from_intervals(x_interval, y_interval)
+        instance.free_polygon -= RectPolygon.from_intervals(x_interval, y_interval)
+        return instance
+
+    @classmethod
+    def from_rect_polygon(cls, rect_polygon: RectPolygon) -> 'RectBisection':
+        instance = cls()
+        for rec in rect_polygon.maximal_rectangles():
+            instance |= rec
+        return instance
+
+    def maximal_rectangles(self) -> Iterator['RectPolygon']:
+        """
+        Yield all maximal rectangle which are contained in this polygon.
+
+        A rectangle is called maximal if it is not contained in any larger rectangle of this polygon.
+
+        :return: Iterator[RPolygon]:
+        """
+        return self.used_polygon.maximal_rectangles()
+
+    def maximal_free_rectangles(self) -> Iterator['RectPolygon']:
+        """
+        Yield all maximal rectangle which do not intersect the polygon uniquely.
+
+        A rectangle is called maximal if it is not contained in any larger rectangle not intersecting this polygon.
+
+        :return: Iterator['RPolygon']:
+        """
+        return self.free_polygon.maximal_rectangles()
+
+    def __copy__(self):
+        rect_bisec_copy = self.__class__()
+        rect_bisec_copy.used_polygon = copy(self.used_polygon)
+        rect_bisec_copy.free_polygon = copy(self.free_polygon)
+        return rect_bisec_copy
+
+    def __or__(self, other) -> 'RectBisection':
+        if isinstance(other, RectBisection) or isinstance(other, RectPolygon):
+            poly_copy = copy(self)
+            for rectangle in other.maximal_rectangles():
+                poly_copy.used_polygon |= rectangle
+                poly_copy.free_polygon -= rectangle
+            return poly_copy
+        else:
+            return NotImplemented
+
+    def __sub__(self, other) -> 'RectBisection':
+        if isinstance(other, RectBisection) or isinstance(other, RectPolygon):
+            poly_copy = copy(self)
+            for rectangle in other.maximal_rectangles():
+                poly_copy.used_polygon -= rectangle
+                poly_copy.free_polygon |= rectangle
+            return poly_copy
+        else:
+            return NotImplemented
+
+    def __invert__(self) -> 'RectBisection':
+        poly_copy = copy(self)
+        poly_copy._invert()
+        return poly_copy
+
+    def __and__(self, other) -> 'RectBisection':
+        return self - (~other)
+
+    def _invert(self):
+        temp = self.used_polygon
+        self.used_polygon = self.free_polygon
+        self.free_polygon = temp
+
+
+def rempty() -> RectPolygon:
     """
     Create an empty rectangular polygon.
 
     :return RPolygon:
     """
-    return RPolygon.from_interval_product(empty(), empty())
+    return RectPolygon.from_intervals(empty(), empty())
 
 
-def ropen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
+def ropen(x_lower, x_upper, y_lower, y_upper) -> RectPolygon:
     """
     Create an open rectangular polygon.
 
@@ -520,10 +628,10 @@ def ropen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
     :param y_upper: value of the upper bound in y-dimension
     :return RPolygon:
     """
-    return RPolygon.from_interval_product(open(x_lower, x_upper), open(y_lower, y_upper))
+    return RectPolygon.from_intervals(open(x_lower, x_upper), open(y_lower, y_upper))
 
 
-def rclosed(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
+def rclosed(x_lower, x_upper, y_lower, y_upper) -> RectPolygon:
     """
     Create a closed rectangular polygon.
 
@@ -533,10 +641,10 @@ def rclosed(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
     :param y_upper: value of the upper bound in y-dimension
     :return RPolygon:
     """
-    return RPolygon.from_interval_product(closed(x_lower, x_upper), closed(y_lower, y_upper))
+    return RectPolygon.from_intervals(closed(x_lower, x_upper), closed(y_lower, y_upper))
 
 
-def rclosedopen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
+def rclosedopen(x_lower, x_upper, y_lower, y_upper) -> RectPolygon:
     """
     Create a rectangular polygon which is closed on both lower bounds
     and open on both upper bounds.
@@ -547,4 +655,4 @@ def rclosedopen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
     :param y_upper: value of the upper bound in y-dimension
     :return RPolygon:
     """
-    return RPolygon.from_interval_product(closedopen(x_lower, x_upper), closedopen(y_lower, y_upper))
+    return RectPolygon.from_intervals(closedopen(x_lower, x_upper), closedopen(y_lower, y_upper))

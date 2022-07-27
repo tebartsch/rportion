@@ -1,11 +1,11 @@
 from .rportion import (
     rclosed,
     rclosedopen,
-    RPolygon,
+    RectBisection,
 )
 
 __all__ = [
     "rclosed",
     "rclosedopen",
-    "RPolygon",
+    "RectBisection",
 ]

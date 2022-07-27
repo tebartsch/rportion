@@ -13,17 +13,18 @@ from matplotlib.cm import get_cmap
 from matplotlib.patches import Rectangle as MplRectangle
 import imageio
 
-from rportion import rclosed, rclosedopen, RPolygon
+from rportion import rclosed, rclosedopen, RectBisection
 from matplotlib import pyplot as plt
 
-from rportion.rportion import rempty
+from rportion.rportion import rempty, RectPolygon, ropen
 
-algo_interval_tree = "interval tree"
+algo_tree_polygon = "tree (polygon)"
+algo_tree_bisection = "tree (bisection)"
 algo_array_all = "array all"
 algo_array_greedy_1 = "array greedy 1"
 algo_array_greedy_2 = "array greedy 2"
 algorithms = [
-    algo_interval_tree,
+    algo_tree_polygon,
     algo_array_all,
     algo_array_greedy_1,
     algo_array_greedy_2
@@ -199,7 +200,7 @@ def plot_rectangles(ax: Axes,
                                   **kwargs))
 
 
-def bounding_coords(rectangles: RPolygon):
+def bounding_coords(rectangles: RectPolygon):
     x_int = rectangles.enclosing_x_interval
     y_int = rectangles.enclosing_y_interval
     if x_int.empty or y_int.empty:
@@ -208,11 +209,10 @@ def bounding_coords(rectangles: RPolygon):
         return x_int.lower, x_int.upper, y_int.lower, y_int.upper
 
 
-def plot_rpolygon(ax: Axes, poly: RPolygon,
-                  box: tuple[tuple[int, int], tuple[int, int]] | None = None):
+def plot_rect_bisection(ax: Axes, bisec: RectBisection,
+                        box: tuple[tuple[int, int], tuple[int, int]] | None = None):
     if box is None:
-        x_int = poly.enclosing_x_interval
-        y_int = poly.enclosing_y_interval
+        x_int, y_int = bisec.used_polygon.enclosing_intervals
         assert (x_int.lower != -P.inf and x_int.upper != P.inf
                 and y_int.lower != -P.inf and y_int.upper != P.inf), (
             f"If parameter box == None the rectangle must be bounded. "
@@ -225,11 +225,11 @@ def plot_rpolygon(ax: Axes, poly: RPolygon,
     ax.set_xlim(*box[0])
     ax.set_ylim(*box[1])
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
-    used_coords = [bounding_coords(rec & enclosing_rec)
-                   for rec in poly.maximal_used_rectangles()]
+    used_coords = [bounding_coords(enclosing_rec & rec)
+                   for rec in bisec.maximal_rectangles()]
     plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "used")
-    free_coords = [bounding_coords(rec & enclosing_rec)
-                   for rec in poly.maximal_free_rectangles()]
+    free_coords = [bounding_coords(enclosing_rec & rec)
+                   for rec in bisec.maximal_free_rectangles()]
     plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "free")
 
 
@@ -250,7 +250,7 @@ def create_gif():
     output_folder = "images"
     os.makedirs(output_folder, exist_ok=True)
 
-    poly = RPolygon()
+    poly = RectBisection()
     for i, (operation, r) in enumerate(r_list):
         fig, ax = plt.subplots(1, 1)
         ax.set_xlim([-2 - 0.5, 10 - 0.5])
@@ -262,7 +262,7 @@ def create_gif():
         fig, ax = plt.subplots(1, 1)
         x_lim = (-2, 9)
         y_lim = (-2, 9)
-        plot_rpolygon(ax, poly, (x_lim, y_lim))
+        plot_rect_bisection(ax, poly, (x_lim, y_lim))
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim, )
         ax.legend(loc="upper right")
@@ -299,8 +299,10 @@ def create_random_polygon(n: int,
     times = {}
 
     for algo in algorithms:
-        if algo == algo_interval_tree:
-            polygons[algo] = RPolygon()
+        if algo == algo_tree_polygon:
+            polygons[algo] = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        elif algo == algo_tree_bisection:
+            polygons[algo] = RectBisection.from_rect_polygon(ropen(-P.inf, P.inf, -P.inf, P.inf))
         else:
             polygons[algo] = np.zeros((x_max, y_max))
         times[algo] = np.zeros(n)
@@ -310,8 +312,8 @@ def create_random_polygon(n: int,
         # Add Rectangle
         for algo in algorithms:
             start_time = time.time()
-            if algo == algo_interval_tree:
-                polygons[algo] |= rclosedopen(*r1)
+            if algo in {algo_tree_polygon, algo_tree_bisection}:
+                polygons[algo] -= rclosedopen(*r1)
             else:
                 polygons[algo][r1[0]:r1[1], r1[2]:r1[3]] = 1
                 get_maximal_rectangles_from_numpy(polygons[algo], mode=algo)
@@ -323,10 +325,10 @@ def create_random_polygon(n: int,
         # Subtract Rectangle
         for algo in algorithms:
             start_time = time.time()
-            if algo == algo_interval_tree:
-                polygons[algo] -= rclosedopen(*r2)
+            if algo in {algo_tree_polygon, algo_tree_bisection}:
+                polygons[algo] |= rclosedopen(*r2)
             else:
-                polygons[algo][r2[0]:r2[1], r2[2]:r2[3]] = 0
+                polygons[algo][r2[0]:r2[1], r2[2]:r2[3]] = 1
                 get_maximal_rectangles_from_numpy(polygons[algo], mode=algo)
             end_time = time.time()
             times[algo][i] = (end_time - start_time) * 1000.0
@@ -336,13 +338,20 @@ def create_random_polygon(n: int,
     enclosing_rec = rclosed(0, x_max, 0, y_max)
     max_rectangles = {}
     for algo in algorithms:
-        if algo == algo_interval_tree:
+        if algo == algo_tree_polygon:
+            max_rectangles[algo] = (
+                [],
+                [coords
+                 for rec in polygons[algo].maximal_rectangles()
+                 if (coords := bounding_coords(rec & enclosing_rec)) is not None]
+            )
+        elif algo == algo_tree_bisection:
             max_rectangles[algo] = (
                 [coords
-                 for rec in polygons[algo].maximal_used_rectangles()
+                 for rec in polygons[algo].maximal_free_rectangles()
                  if (coords := bounding_coords(rec & enclosing_rec)) is not None],
                 [coords
-                 for rec in polygons[algo].maximal_free_rectangles()
+                 for rec in polygons[algo].maximal_rectangles()
                  if (coords := bounding_coords(rec & enclosing_rec)) is not None]
             )
         else:
@@ -355,20 +364,21 @@ def create_random_polygon(n: int,
 
 
 def evaluate_random_polygon(save_image=True, show_progress=True):
-    n = 50
-    x_max = 32
-    max_x_len = 8
-    y_max = 32
-    max_y_len = 8
+    n = 100
+    x_max = 512
+    max_x_len = 75
+    y_max = 512
+    max_y_len = 75
 
     algos = [
-        algo_interval_tree,
-        algo_array_all,
-        algo_array_greedy_1,
+        algo_tree_polygon,
+        algo_tree_bisection,
+        # algo_array_all,
+        # algo_array_greedy_1,
         algo_array_greedy_2
     ]
 
-    repetitions = 10
+    repetitions = 1
     max_rectangles_dict, times_dict = create_random_polygon(n=n,
                                                             x_max=x_max, max_x_len=max_x_len,
                                                             y_max=y_max, max_y_len=max_y_len,
@@ -390,21 +400,21 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
     for name in times_dict:
         times_dict[name] /= repetitions
 
-    if algo_interval_tree in algos:
-        for algo in list(set(algos) - {algo_interval_tree}):
+    if algo_tree_bisection in algos:
+        for algo in list(set(algos) - {algo_tree_bisection}):
             print(f"ALGORITHM {algo}")
             common_used_rectangles = (set(max_rectangles_dict[algo][0])
-                                      & set(max_rectangles_dict[algo_interval_tree][0]))
+                                      & set(max_rectangles_dict[algo_tree_bisection][0]))
             common_free_rectangles = (set(max_rectangles_dict[algo][1])
-                                      & set(max_rectangles_dict[algo_interval_tree][1]))
-            only_tree_used_recs = (set(max_rectangles_dict[algo_interval_tree][0])
+                                      & set(max_rectangles_dict[algo_tree_bisection][1]))
+            only_tree_used_recs = (set(max_rectangles_dict[algo_tree_bisection][0])
                                    - set(max_rectangles_dict[algo][0]))
             only_array_used_recs = (set(max_rectangles_dict[algo][0])
-                                    - set(max_rectangles_dict[algo_interval_tree][0]))
-            only_tree_free_recs = (set(max_rectangles_dict[algo_interval_tree][1])
+                                    - set(max_rectangles_dict[algo_tree_bisection][0]))
+            only_tree_free_recs = (set(max_rectangles_dict[algo_tree_bisection][1])
                                    - set(max_rectangles_dict[algo][1]))
             only_array_free_recs = (set(max_rectangles_dict[algo][1])
-                                    - set(max_rectangles_dict[algo_interval_tree][1]))
+                                    - set(max_rectangles_dict[algo_tree_bisection][1]))
 
             print(f"Used rectangles")
             print(f"  array & tree: {len(common_used_rectangles)} rectangles")
@@ -455,7 +465,8 @@ def benchmark():
     N = np.arange(10, 100)
 
     algos = [
-        algo_interval_tree,
+        algo_tree_polygon,
+        algo_tree_bisection,
         # algo_array_all,
         algo_array_greedy_1,
         algo_array_greedy_2,
@@ -469,7 +480,7 @@ def benchmark():
             _, times_dict = create_random_polygon(n=n,
                                                   x_max=x_max, max_x_len=max_x_len,
                                                   y_max=y_max, max_y_len=max_y_len,
-                                                  algorithms=algorithms)
+                                                  algorithms=algos)
             for algo in algos:
                 times[algo][i] += times_dict[algo].sum() / repetitions
 
@@ -484,9 +495,9 @@ def benchmark():
 
 
 def main():
-    random.seed(4)
+    random.seed(452351)
     print("creating gif")
-    create_gif()
+    # create_gif()
     print("evaluate a random sequence of unions and subtractions")
     evaluate_random_polygon(show_progress=True)
     print("benchmark random sequence of unions and subtractions of increasing length")

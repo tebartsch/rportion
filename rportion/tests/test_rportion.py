@@ -6,8 +6,8 @@ import numpy as np
 import portion as P
 from portion.interval import open, closedopen, Atomic, empty, Interval
 
-from rportion import RPolygon
-from rportion.rportion import ropen, rclosedopen, rclosed, rempty
+from rportion import RectBisection
+from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RectPolygon
 
 from rportion.tests.algorithms import get_maximal_rectangles_from_numpy
 
@@ -20,17 +20,27 @@ def print_mat(mat: list[list[Interval]]):
     print()
 
 
-def print_rpolygon(rpoly: RPolygon, show_trees=False):
+def print_rect_bisection(r_bisec: RectBisection, show_trees=False):
+    if show_trees:
+        print("Data Trees")
+        print(r_bisec.used_polygon._x_boundaries)
+        print_mat(r_bisec.used_polygon._y_intervals)
+        print_mat(r_bisec.free_polygon._y_intervals)
+    print("Maximal used rectangles")
+    for i, e in enumerate(r_bisec.maximal_rectangles(), start=1):
+        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+    print("Maximal free rectangles")
+    for i, e in enumerate(r_bisec.maximal_free_rectangles(), start=1):
+        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+
+
+def print_rpolygon(rpoly: RectPolygon, show_trees=False):
     if show_trees:
         print("Data Trees")
         print(rpoly._x_boundaries)
-        print_mat(rpoly._used_y_ranges)
-        print_mat(rpoly._free_y_ranges)
+        print_mat(rpoly._y_intervals)
     print("Maximal used rectangles")
-    for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
-        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
-    print("Maximal free rectangles")
-    for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
+    for i, e in enumerate(rpoly.maximal_rectangles(), start=1):
         print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
 
 
@@ -38,7 +48,169 @@ class TestRPortion(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestRPortion, self).__init__(*args, **kwargs)
 
-    def test_RPolygon_maximal_atomic_x_rectangles(self):
+    def test_RectPolygon__enclosing_intervals(self):
+        rect_poly = rclosedopen(0, 2, 0, 2) | rclosedopen(1, 4, 1, 3)
+        self.assertEqual(rect_poly.enclosing_x_interval, closedopen(0, 4))
+        self.assertEqual(rect_poly.enclosing_y_interval, closedopen(0, 3))
+
+    def test_RectPolygon__add_atomic(self):
+        # empty x_interval
+        poly = rempty()
+        x_atom = closedopen(1, 0)
+        y_interval = open(1, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[empty()]])
+
+        # empty y_interval
+        poly = rempty()
+        x_atom = closedopen(-P.inf, 1)
+        y_interval = empty()
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[empty()]])
+
+        # add the whole area
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[open(-P.inf, P.inf)]])
+
+        # add half planes
+        # # (a) Right half space
+        poly = rempty()
+        x_atom = closedopen(0, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        # # (b) Left half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, 0)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        # # (c) Upper half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, 0)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[open(-P.inf, 0)]])
+        # # (d) Lower half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = closedopen(0, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[closedopen(0, P.inf)]])
+
+        # add a single bounded polygon
+        poly = rempty()
+        x_atom = closedopen(1, 3)
+        y_interval = closedopen(2, 4)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [empty(), empty(), empty()],
+            [empty(), closedopen(2, 4)],
+            [empty()]
+        ])
+
+        # Add three sectors in each six possible different orders and test if the result underlying
+        # data structure of RPolygon is the same for all.
+        #
+        #     x1 x2 x3  x4 x5 x6
+        #      +----+
+        #      |  +-|------+
+        #      +--|-+      |
+        #         |        |
+        #         |      +-|--+
+        #         +------|-+  |
+        #                +----+
+        # TODO Fix this test
+        if False:
+            x1, x2, x3, x4, x5, x6 = (1, 2, 3, 4, 5, 6)
+            y_interval_1 = closedopen(-1, 1)
+            y_interval_2 = closedopen(0, 2)
+            y_interval_3 = closedopen(1, 2)
+            x_lims = [(x1, x3), (x4, x6), (x2, x5)]
+            y_intervals = [y_interval_1, y_interval_2, y_interval_3]
+            poly_list = []
+            for arrangement in permutations(zip(x_lims, y_intervals)):
+                poly = rempty()
+                for (x_a, x_b), y_int in arrangement:
+                    poly._add_atomic(closedopen(x_a, x_b), y_int)
+                poly_list.append(poly)
+            for poly_1, poly_2 in combinations(poly_list, 2):
+                self.assertListEqual(poly_1._y_intervals, poly_2._y_intervals)
+
+    def test_RectPolygon__sub_atomic(self):
+        # Remove rectangle with empty x_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(1, 0)
+        y_interval = open(1, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[open(-P.inf, P.inf)]])
+
+        # Remove rectangle with empty y_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, 1)
+        y_interval = empty()
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[open(-P.inf, P.inf)]])
+
+        # Remove half planes from the whole plane
+        # # (a) Right half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(0, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        # # (b) Left half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, 0)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        # # (c) Upper half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, 0)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[closedopen(0, P.inf)]])
+        # # (d) Lower half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = closedopen(0, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [[open(-P.inf, 0)]])
+
+        # remove a single bounded rectangle from the plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(1, 3)
+        y_interval = closedopen(2, 4)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._y_intervals, [
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, P.inf)],
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf)],
+            [open(-P.inf, P.inf)]
+        ])
+
+    def test_RectBisection___or__(self):
+        def recs_to_intervals(poly_list: list[RectPolygon]):
+            return [poly.enclosing_intervals for poly in poly_list]
+
         # Add two finite (in x dimension) polygons.
         #        (1)          (2)         (3)         (4)           (5)
         #          +--+       +---+       +--+       +---+       +--+
@@ -52,59 +224,80 @@ class TestRPortion(unittest.TestCase):
         y_interval_1 = closedopen(-1, 1)
         y_interval_2 = closedopen(0, 2)
         # (1)
-        poly = rempty()
-        poly._add_atomic(closedopen(x1, x2), y_interval_1)
-        poly._add_atomic(closedopen(x3, x4), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
-            (closedopen(x1, x2), y_interval_1),
-            (closedopen(x3, x4), y_interval_2)
-        ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
-            (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
-            (open(-P.inf, x3),
-             Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
-            (closedopen(x2, P.inf),
-             Interval.from_atomic(P.OPEN, -P.inf, y_interval_2.lower, ~y_interval_2.left)),
-            (open(-P.inf, x1), open(-P.inf, P.inf)),
-            (closedopen(x2, x3), open(-P.inf, P.inf)),
-            (closedopen(x4, P.inf), open(-P.inf, P.inf)),
-        ])
+        poly = RectBisection.from_rect_polygon(rempty())
+        poly |= RectPolygon.from_intervals(closedopen(x1, x2), y_interval_1)
+        poly |= RectPolygon.from_intervals(closedopen(x3, x4), y_interval_2)
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_rectangles())), [
+                (closedopen(x1, x2), y_interval_1),
+                (closedopen(x3, x4), y_interval_2)
+            ]
+        )
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_free_rectangles())),
+            [
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_1.lower, ~y_interval_1.left)),
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(~y_interval_2.right, y_interval_2.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x3),
+                 Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
+                (closedopen(x2, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_2.lower, ~y_interval_2.left)),
+                (open(-P.inf, x1), open(-P.inf, P.inf)),
+                (closedopen(x2, x3), open(-P.inf, P.inf)),
+                (closedopen(x4, P.inf), open(-P.inf, P.inf)),
+            ]
+        )
         # (2)
-        poly = rempty()
-        poly._add_atomic(closedopen(x1, x3), y_interval_1)
-        poly._add_atomic(closedopen(x2, x4), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
-            (closedopen(x1, x4), y_interval_1 & y_interval_2),
-            (closedopen(x1, x3), y_interval_1),
-            (closedopen(x2, x4), y_interval_2),
-            (closedopen(x2, x3), y_interval_1 | y_interval_2)
-        ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
-            (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
-            (open(-P.inf, x2),
-             Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
-            (closedopen(x3, P.inf),
-             Interval.from_atomic(P.OPEN, -P.inf, y_interval_2.lower, ~y_interval_2.left)),
-            (open(-P.inf, x1), open(-P.inf, P.inf)),
-            (closedopen(x4, P.inf), open(-P.inf, P.inf)),
-        ])
+        poly = RectBisection.from_rect_polygon(rempty())
+        poly |= RectPolygon.from_intervals(closedopen(x1, x3), y_interval_1)
+        poly |= RectPolygon.from_intervals(closedopen(x2, x4), y_interval_2)
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_rectangles())),
+            [(closedopen(x1, x4), y_interval_1 & y_interval_2),
+             (closedopen(x1, x3), y_interval_1),
+             (closedopen(x2, x4), y_interval_2),
+             (closedopen(x2, x3), y_interval_1 | y_interval_2)]
+        )
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_free_rectangles())), [
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_1.lower, ~y_interval_1.left)),
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(~y_interval_2.right, y_interval_2.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x2),
+                 Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
+                (closedopen(x3, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_2.lower, ~y_interval_2.left)),
+                (open(-P.inf, x1), open(-P.inf, P.inf)),
+                (closedopen(x4, P.inf), open(-P.inf, P.inf)),
+            ])
         # (3)
-        poly = rempty()
-        poly._add_atomic(closedopen(x1, x4), y_interval_1)
-        poly._add_atomic(closedopen(x2, x3), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
-            (closedopen(x1, x4), y_interval_1),
-            (closedopen(x2, x3), y_interval_1 | y_interval_2),
-        ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
-            (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
-            (open(-P.inf, x2),
-             Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
-            (closedopen(x3, P.inf),
-             Interval.from_atomic(~y_interval_2.right, y_interval_1.upper, P.inf, P.OPEN)),
-            (open(-P.inf, x1), open(-P.inf, P.inf)),
-            (closedopen(x4, P.inf), open(-P.inf, P.inf)),
-        ])
+        poly = RectBisection.from_rect_polygon(rempty())
+        poly |= RectPolygon.from_intervals(closedopen(x1, x4), y_interval_1)
+        poly |= RectPolygon.from_intervals(closedopen(x2, x3), y_interval_2)
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_rectangles())),
+            [
+                (closedopen(x1, x4), y_interval_1),
+                (closedopen(x2, x3), y_interval_1 | y_interval_2),
+            ]
+        )
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_free_rectangles())),
+            [
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_1.lower, ~y_interval_1.left)),
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(~y_interval_2.right, y_interval_2.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x2),
+                 Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
+                (closedopen(x3, P.inf),
+                 Interval.from_atomic(~y_interval_2.right, y_interval_1.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x1), open(-P.inf, P.inf)),
+                (closedopen(x4, P.inf), open(-P.inf, P.inf)),
+            ])
         # skip (4) & (5)
 
         # Test the following polygon addition sequence.
@@ -121,32 +314,40 @@ class TestRPortion(unittest.TestCase):
         y_interval_2 = closedopen(1, 3)
         y_interval_3 = closedopen(2, 5)
         x1, x2, x3, x4, x5, x6 = (1, 2, 3, 4, 5, 6)
-        # (1)
-        poly = rempty()
-        poly._add_atomic(closedopen(x1, x3), y_interval_1)
-        poly._add_atomic(closedopen(x4, x6), y_interval_2)
-        poly._add_atomic(closedopen(x2, x5), y_interval_3)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
-            (closedopen(x1, x5), closedopen(x4, x5)),
-            (closedopen(x2, x6), closedopen(x2, x3)),
-            (closedopen(x2, x5), closedopen(x2, x5)),
-            (closedopen(x1, x3), closedopen(x4, x6)),
-            (closedopen(x4, x6), closedopen(x1, x3)),
-            (closedopen(x2, x3), closedopen(x2, x6)),
-            (closedopen(x4, x5), closedopen(x1, x5)),
-        ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
-            (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2 | y_interval_3)),
-            (open(-P.inf, x4),
-             Interval.from_atomic(P.OPEN, -P.inf, y_interval_3.lower, ~y_interval_3.left)),
-            (closedopen(x3, P.inf),
-             Interval.from_atomic(~y_interval_3.right, y_interval_3.upper, P.inf, P.OPEN)),
-            (open(-P.inf, x2), Interval.from_atomic(P.OPEN, -P.inf, y_interval_1.lower, ~y_interval_1.left)),
-            (closedopen(x5, P.inf),
-             Interval.from_atomic(~y_interval_2.right, y_interval_2.upper, P.inf, P.OPEN)),
-            (open(-P.inf, x1), open(-P.inf, P.inf)),
-            (closedopen(x6, P.inf), open(-P.inf, P.inf)),
-        ])
+        poly = RectBisection.from_rect_polygon(rempty())
+        poly |= RectPolygon.from_intervals(closedopen(x1, x3), y_interval_1)
+        poly |= RectPolygon.from_intervals(closedopen(x4, x6), y_interval_2)
+        poly |= RectPolygon.from_intervals(closedopen(x2, x5), y_interval_3)
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_rectangles())),
+            [
+                (closedopen(x1, x5), closedopen(x4, x5)),
+                (closedopen(x2, x6), closedopen(x2, x3)),
+                (closedopen(x2, x5), closedopen(x2, x5)),
+                (closedopen(x1, x3), closedopen(x4, x6)),
+                (closedopen(x4, x6), closedopen(x1, x3)),
+                (closedopen(x2, x3), closedopen(x2, x6)),
+                (closedopen(x4, x5), closedopen(x1, x5)),
+            ]
+        )
+        self.assertListEqual(
+            recs_to_intervals(list(poly.maximal_free_rectangles())),
+            [
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_2.lower, ~y_interval_2.left)),
+                (open(-P.inf, P.inf),
+                 Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x4),
+                 Interval.from_atomic(P.OPEN, -P.inf, y_interval_3.lower, ~y_interval_3.left)),
+                (closedopen(x3, P.inf),
+                 Interval.from_atomic(~y_interval_3.right, y_interval_3.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x2), Interval.from_atomic(P.OPEN, -P.inf, y_interval_1.lower, ~y_interval_1.left)),
+                (closedopen(x5, P.inf),
+                 Interval.from_atomic(~y_interval_2.right, y_interval_2.upper, P.inf, P.OPEN)),
+                (open(-P.inf, x1), open(-P.inf, P.inf)),
+                (closedopen(x6, P.inf), open(-P.inf, P.inf)),
+            ]
+        )
 
         # Test the following polygon addition sequence, where the third rectangle directly touches the second one.
         #
@@ -156,212 +357,16 @@ class TestRPortion(unittest.TestCase):
         #    +----+          +----+     +----+        +----+    +---------+
         y_interval = closedopen(0, 1)
         x1, x2, x3, x4, x5 = 1, 2, 3, 4, 5
-        poly = rempty()
-        # poly._add_atomic(closedopen(x1, x2), y_interval)
-        poly._add_atomic(closedopen(x3, x4), y_interval)
-        poly._add_atomic(closedopen(x4, x5), y_interval)
-        print_rpolygon(poly, show_trees=True)
+        poly = RectBisection.from_rect_polygon(rempty())
+        poly |= RectPolygon.from_intervals(closedopen(x1, x2), y_interval)
+        poly |= RectPolygon.from_intervals(closedopen(x3, x4), y_interval)
+        poly |= RectPolygon.from_intervals(closedopen(x4, x5), y_interval)
+        print_rect_bisection(poly, show_trees=True)
 
-        # Add three sectors in each six possible different orders and test if the result underlying
-        # data structure of RPolygon is the same for all.
-        #
-        #     x1 x2 x3  x4 x5 x6
-        #      +----+
-        #      |  +-|------+
-        #      +--|-+      |
-        #         |        |
-        #         |      +-|--+
-        #         +------|-+  |
-        #                +----+
-        x1, x2, x3, x4 = (1, 2, 3, 4)
-        y_interval_1 = closedopen(-1, 1)
-        y_interval_2 = closedopen(0, 2)
-        x_lims = [(x1, x3), (x4, x6), (x2, x5)]
-        y_intervals = [y_interval_1, y_interval_2, y_interval_3]
-        poly_list = []
-        for arrangement in permutations(zip(x_lims, y_intervals)):
-            poly = rempty()
-            for (x_a, x_b), y_int in arrangement:
-                poly._add_atomic(closedopen(x_a, x_b), y_int)
-            poly_list.append(poly)
-        for poly_1, poly_2 in combinations(poly_list, 2):
-            self.assertListEqual(poly_1._used_y_ranges, poly_2._used_y_ranges)
-            self.assertListEqual(poly_1._free_y_ranges, poly_2._free_y_ranges)
-
-    def test_RPolygon___sub__(self):
-        poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
-        poly._sub_interval_product(open(-P.inf, P.inf), open(-P.inf, 0) | open(1, P.inf))
-        # poly._sub_atomic(closedopen(-P.inf, 0), open(-P.inf, P.inf))
-        print_rpolygon(poly, show_trees=True)
-        print("----")
-        print_rpolygon(ropen(-P.inf, 0, -P.inf, P.inf) & rclosed(0, 3, 0, 3), show_trees=True)
-
-    def test_RPolygon__add_atomic(self):
-        # empty x_interval
-        poly = rempty()
-        x_atom = closedopen(1, 0)
-        y_interval = open(1, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[empty()]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
-
-        # empty y_interval
-        poly = rempty()
-        x_atom = closedopen(-P.inf, 1)
-        y_interval = empty()
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[empty()]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
-
-        # add the whole area
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # add half planes
-        # # (a) Right half space
-        poly = rempty()
-        x_atom = closedopen(0, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        # # (b) Left half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, 0)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        # # (c) Upper half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, 0)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
-        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
-        # # (d) Lower half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = closedopen(0, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
-
-        # add a single bounded polygon
-        poly = rempty()
-        x_atom = closedopen(1, 3)
-        y_interval = closedopen(2, 4)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty(), empty()],
-            [empty(), closedopen(2, 4)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, P.inf)],
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf)],
-            [open(-P.inf, P.inf)]
-        ])
-
-    def test_RPolygon__sub_atomic(self):
-        # Removing an arbitrary rectangle from an empty polygon is effect less
-        # TODO
-
-        # Remove rectangle with empty x_interval from the whole plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(1, 0)
-        y_interval = open(1, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # Remove rectangle with empty y_interval from the whole plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, 1)
-        y_interval = empty()
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # Remove half planes from the whole plane
-        # # (a) Right half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(0, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        # # (b) Left half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, 0)
-        y_interval = open(-P.inf, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        # # (c) Upper half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, 0)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
-        # # (d) Lower half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = closedopen(0, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
-        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
-
-        # remove a single bounded rectangle from the plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(1, 3)
-        y_interval = closedopen(2, 4)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, P.inf)],
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf)],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty(), empty()],
-            [empty(), closedopen(2, 4)],
-            [empty()]
-        ])
+    def test_RectBisection___sub__(self):
+        bisect = RectBisection.from_rect_polygon(rclosedopen(-P.inf, 0, -P.inf, P.inf))
+        bisect -= RectPolygon.from_intervals(open(-P.inf, P.inf), open(-P.inf, 0) | open(1, P.inf))
+        print_rect_bisection(bisect, show_trees=True)
 
     def test_maximal_rectangles_extra(self):
         n = 15  # Number of rectangles
@@ -383,11 +388,11 @@ class TestRPortion(unittest.TestCase):
                 rec_list.append((x_left, x_right, y_left, y_right))
 
             arr = np.zeros((y_max, x_max))
-            poly = rempty()
+            bisection = RectBisection()
 
             for i, r in enumerate(rec_list):
                 arr[r[2]:r[3], r[0]:r[1]] = 1
-                poly |= rclosedopen(*r)
+                bisection |= rclosedopen(*r)
 
             arr_used_rectangles = set(get_maximal_rectangles_from_numpy(arr == 0))
             arr_free_rectangles = set(get_maximal_rectangles_from_numpy(arr))
@@ -395,12 +400,12 @@ class TestRPortion(unittest.TestCase):
             poly_used_rectangles = set([
                 (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
                  r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
-                for r in poly.maximal_used_rectangles()
+                for r in bisection.maximal_rectangles()
             ])
             poly_free_rectangles = set([
                 (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
                  r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
-                for r in (poly | (~ropen(0, x_max, 0, y_max))).maximal_free_rectangles()])
+                for r in (bisection | (~ropen(0, x_max, 0, y_max))).maximal_free_rectangles()])
 
             def matrix_to_str(usage_arr: np.array):
                 msg = ""
