@@ -2,7 +2,7 @@ from copy import copy
 from typing import Iterator
 
 import portion as P
-from portion.interval import Interval, open, empty, closedopen, closed, Atomic
+from portion.interval import Interval, open, empty, closedopen, closed
 from sortedcontainers import SortedList
 
 
@@ -110,7 +110,7 @@ def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[li
         (Y)     4  |   ()    [0,1)
                 5  |   ()
 
-    In contrast this triangle the boundary 4 cannot be pruned.
+    In contrast for this triangle the boundary 4 cannot be pruned.
 
                                   (M)    (N)
                    |  +inf     3      4     5
@@ -172,7 +172,7 @@ def _update_x_boundaries_and_y_interval_triangles(
         x_boundaries: SortedList[RBoundary],
         y_interval_triangle_add: list[list[Interval]],
         y_interval_triangle_sub: list[list[Interval]],
-        other_x_atom: Atomic, other_y_interval: Interval):
+        other_x_atom: Interval, other_y_interval: Interval):
     """
     Update
        - y_interval_triangle_add
@@ -185,15 +185,12 @@ def _update_x_boundaries_and_y_interval_triangles(
     :y_interval_triangle_sub list[list[Interval]]:
     :new_x_atom Atomic, new_y_interval: Interval:
     """
-    other_x_interval = Interval.from_atomic(other_x_atom.left, other_x_atom.lower,
-                                            other_x_atom.upper, other_x_atom.right)
-    if other_x_interval.empty or other_y_interval.empty:
-        return
+    assert other_x_atom.atomic
 
     # Left and right boundary of other_x_atom
-    l_bound_type = ~other_x_atom.left if other_x_atom.lower != -P.inf else P.OPEN
+    l_bound_type = ~other_x_atom.left
     x_b_left = RBoundary(other_x_atom.lower, l_bound_type)
-    r_bound_type = other_x_atom.right if other_x_atom.upper != P.inf else P.OPEN
+    r_bound_type = other_x_atom.right
     x_b_right = RBoundary(other_x_atom.upper, r_bound_type)
 
     # (a) Add new rows/columns to the y-interval-triangles and the x-boundaries
@@ -214,13 +211,13 @@ def _update_x_boundaries_and_y_interval_triangles(
             r_bound = x_boundaries[-j - 1]
             x_interval = Interval.from_atomic(~l_bound.btype, l_bound.val, r_bound.val, r_bound.btype)
 
-            if other_x_interval.contains(x_interval):
+            if other_x_atom.contains(x_interval):
                 y_interval_triangle_add[i][j] |= other_y_interval
             else:
-                adj_other_x_interval = other_x_interval
+                adj_other_x_interval = other_x_atom
 
-                other_x_int_l_bound = ~RBoundary(other_x_interval.lower, other_x_interval.left)
-                other_y_int_r_bound = RBoundary(other_x_interval.upper, other_x_interval.right)
+                other_x_int_l_bound = ~RBoundary(other_x_atom.lower, other_x_atom.left)
+                other_y_int_r_bound = RBoundary(other_x_atom.upper, other_x_atom.right)
 
                 left_ind = x_boundaries.bisect_left(other_x_int_l_bound)
                 col = n - left_ind
@@ -251,7 +248,7 @@ def _update_x_boundaries_and_y_interval_triangles(
             l_bound = ~x_boundaries[i]
             r_bound = x_boundaries[-j - 1]
             x_interval = Interval.from_atomic(l_bound.btype, l_bound.val, r_bound.val, r_bound.btype)
-            if other_x_interval.overlaps(x_interval):
+            if other_x_atom.overlaps(x_interval):
                 y_interval_triangle_sub[i][j] -= other_y_interval
 
     # (d) Prune the y-interval-triangles if possible
@@ -470,16 +467,14 @@ class RPolygon:
     def _add_interval_product(self, x_interval: Interval, y_interval: Interval):
         if not x_interval.empty and not y_interval.empty:
             for x_atom in x_interval:
-                x_atom = Atomic(x_atom.left, x_atom.lower, x_atom.upper, x_atom.right)
                 self._add_atomic(x_atom, y_interval)
 
     def _sub_interval_product(self, x_interval: Interval, y_interval: Interval):
         if not x_interval.empty and not y_interval.empty:
             for x_atom in x_interval:
-                x_atom = Atomic(x_atom.left, x_atom.lower, x_atom.upper, x_atom.right)
                 self._sub_atomic(x_atom, y_interval)
 
-    def _add_atomic(self, add_x_atom: Atomic, add_y_interval: Interval):
+    def _add_atomic(self, add_x_atom: Interval, add_y_interval: Interval):
         """
         Update self._used_y_ranges and self._free_y_ranges such that they represent the union of the old rectangular
         polygon and the provided interval product.
@@ -492,7 +487,7 @@ class RPolygon:
             add_y_interval,
         )
 
-    def _sub_atomic(self, sub_x_atom: Atomic, sub_y_interval: Interval):
+    def _sub_atomic(self, sub_x_atom: Interval, sub_y_interval: Interval):
         """
         Update self._used_y_ranges and self._free_y_ranges such that they represent the set difference of the old
         rectangular polygon and the provided interval product.

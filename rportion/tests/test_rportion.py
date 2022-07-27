@@ -53,8 +53,8 @@ class TestRPortion(unittest.TestCase):
         y_interval_2 = closedopen(0, 2)
         # (1)
         poly = rempty()
-        poly._add_atomic(Atomic(P.CLOSED, x1, x2, P.OPEN), y_interval_1)
-        poly._add_atomic(Atomic(P.CLOSED, x3, x4, P.OPEN), y_interval_2)
+        poly._add_atomic(closedopen(x1, x2), y_interval_1)
+        poly._add_atomic(closedopen(x3, x4), y_interval_2)
         self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x2), y_interval_1),
             (closedopen(x3, x4), y_interval_2)
@@ -71,8 +71,8 @@ class TestRPortion(unittest.TestCase):
         ])
         # (2)
         poly = rempty()
-        poly._add_atomic(Atomic(P.CLOSED, x1, x3, P.OPEN), y_interval_1)
-        poly._add_atomic(Atomic(P.CLOSED, x2, x4, P.OPEN), y_interval_2)
+        poly._add_atomic(closedopen(x1, x3), y_interval_1)
+        poly._add_atomic(closedopen(x2, x4), y_interval_2)
         self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1 & y_interval_2),
             (closedopen(x1, x3), y_interval_1),
@@ -90,8 +90,8 @@ class TestRPortion(unittest.TestCase):
         ])
         # (3)
         poly = rempty()
-        poly._add_atomic(Atomic(P.CLOSED, x1, x4, P.OPEN), y_interval_1)
-        poly._add_atomic(Atomic(P.CLOSED, x2, x3, P.OPEN), y_interval_2)
+        poly._add_atomic(closedopen(x1, x4), y_interval_1)
+        poly._add_atomic(closedopen(x2, x3), y_interval_2)
         self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1),
             (closedopen(x2, x3), y_interval_1 | y_interval_2),
@@ -123,9 +123,9 @@ class TestRPortion(unittest.TestCase):
         x1, x2, x3, x4, x5, x6 = (1, 2, 3, 4, 5, 6)
         # (1)
         poly = rempty()
-        poly._add_atomic(Atomic(P.CLOSED, x1, x3, P.OPEN), y_interval_1)
-        poly._add_atomic(Atomic(P.CLOSED, x4, x6, P.OPEN), y_interval_2)
-        poly._add_atomic(Atomic(P.CLOSED, x2, x5, P.OPEN), y_interval_3)
+        poly._add_atomic(closedopen(x1, x3), y_interval_1)
+        poly._add_atomic(closedopen(x4, x6), y_interval_2)
+        poly._add_atomic(closedopen(x2, x5), y_interval_3)
         self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
             (closedopen(x1, x5), closedopen(x4, x5)),
             (closedopen(x2, x6), closedopen(x2, x3)),
@@ -157,9 +157,9 @@ class TestRPortion(unittest.TestCase):
         y_interval = closedopen(0, 1)
         x1, x2, x3, x4, x5 = 1, 2, 3, 4, 5
         poly = rempty()
-        # poly._add_atomic(Atomic(P.CLOSED, x1, x2, P.OPEN), y_interval)
-        poly._add_atomic(Atomic(P.CLOSED, x3, x4, P.OPEN), y_interval)
-        poly._add_atomic(Atomic(P.CLOSED, x4, x5, P.OPEN), y_interval)
+        # poly._add_atomic(closedopen(x1, x2), y_interval)
+        poly._add_atomic(closedopen(x3, x4), y_interval)
+        poly._add_atomic(closedopen(x4, x5), y_interval)
         print_rpolygon(poly, show_trees=True)
 
         # Add three sectors in each six possible different orders and test if the result underlying
@@ -182,7 +182,7 @@ class TestRPortion(unittest.TestCase):
         for arrangement in permutations(zip(x_lims, y_intervals)):
             poly = rempty()
             for (x_a, x_b), y_int in arrangement:
-                poly._add_atomic(Atomic(P.CLOSED, x_a, x_b, P.OPEN), y_int)
+                poly._add_atomic(closedopen(x_a, x_b), y_int)
             poly_list.append(poly)
         for poly_1, poly_2 in combinations(poly_list, 2):
             self.assertListEqual(poly_1._used_y_ranges, poly_2._used_y_ranges)
@@ -191,7 +191,7 @@ class TestRPortion(unittest.TestCase):
     def test_RPolygon___sub__(self):
         poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
         poly._sub_interval_product(open(-P.inf, P.inf), open(-P.inf, 0) | open(1, P.inf))
-        # poly._sub_atomic(Atomic(P.OPEN, -P.inf, 0, P.OPEN), open(-P.inf, P.inf))
+        # poly._sub_atomic(closedopen(-P.inf, 0), open(-P.inf, P.inf))
         print_rpolygon(poly, show_trees=True)
         print("----")
         print_rpolygon(ropen(-P.inf, 0, -P.inf, P.inf) & rclosed(0, 3, 0, 3), show_trees=True)
@@ -199,7 +199,7 @@ class TestRPortion(unittest.TestCase):
     def test_RPolygon__add_atomic(self):
         # empty x_interval
         poly = rempty()
-        x_atom = Atomic(P.CLOSED, 1, 0, P.OPEN)
+        x_atom = closedopen(1, 0)
         y_interval = open(1, P.inf)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[empty()]])
@@ -207,7 +207,7 @@ class TestRPortion(unittest.TestCase):
 
         # empty y_interval
         poly = rempty()
-        x_atom = Atomic(P.OPEN, -P.inf, 1, P.OPEN)
+        x_atom = closedopen(-P.inf, 1)
         y_interval = empty()
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[empty()]])
@@ -215,7 +215,7 @@ class TestRPortion(unittest.TestCase):
 
         # add the whole area
         poly = rempty()
-        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        x_atom = closedopen(-P.inf, P.inf)
         y_interval = open(-P.inf, P.inf)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
@@ -224,7 +224,7 @@ class TestRPortion(unittest.TestCase):
         # add half planes
         # # (a) Right half space
         poly = rempty()
-        x_atom = Atomic(P.CLOSED, 0, P.inf, P.OPEN)
+        x_atom = closedopen(0, P.inf)
         y_interval = open(-P.inf, P.inf)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
@@ -237,7 +237,7 @@ class TestRPortion(unittest.TestCase):
         ])
         # # (b) Left half space
         poly = rempty()
-        x_atom = Atomic(P.OPEN, -P.inf, 0, P.CLOSED)
+        x_atom = closedopen(-P.inf, 0)
         y_interval = open(-P.inf, P.inf)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
@@ -250,14 +250,14 @@ class TestRPortion(unittest.TestCase):
         ])
         # # (c) Upper half space
         poly = rempty()
-        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        x_atom = closedopen(-P.inf, P.inf)
         y_interval = open(-P.inf, 0)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
         self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
         # # (d) Lower half space
         poly = rempty()
-        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        x_atom = closedopen(-P.inf, P.inf)
         y_interval = closedopen(0, P.inf)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
@@ -265,7 +265,7 @@ class TestRPortion(unittest.TestCase):
 
         # add a single bounded polygon
         poly = rempty()
-        x_atom = Atomic(P.CLOSED, 1, 3, P.OPEN)
+        x_atom = closedopen(1, 3)
         y_interval = closedopen(2, 4)
         poly._add_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
@@ -288,7 +288,7 @@ class TestRPortion(unittest.TestCase):
 
         # Remove rectangle with empty x_interval from the whole plane
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.CLOSED, 1, 0, P.OPEN)
+        x_atom = closedopen(1, 0)
         y_interval = open(1, P.inf)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
@@ -296,7 +296,7 @@ class TestRPortion(unittest.TestCase):
 
         # Remove rectangle with empty y_interval from the whole plane
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.OPEN, -P.inf, 1, P.OPEN)
+        x_atom = closedopen(-P.inf, 1)
         y_interval = empty()
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
@@ -305,7 +305,7 @@ class TestRPortion(unittest.TestCase):
         # Remove half planes from the whole plane
         # # (a) Right half space
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.CLOSED, 0, P.inf, P.OPEN)
+        x_atom = closedopen(0, P.inf)
         y_interval = open(-P.inf, P.inf)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
@@ -318,7 +318,7 @@ class TestRPortion(unittest.TestCase):
         ])
         # # (b) Left half space
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.OPEN, -P.inf, 0, P.CLOSED)
+        x_atom = closedopen(-P.inf, 0)
         y_interval = open(-P.inf, P.inf)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
@@ -331,14 +331,14 @@ class TestRPortion(unittest.TestCase):
         ])
         # # (c) Upper half space
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        x_atom = closedopen(-P.inf, P.inf)
         y_interval = open(-P.inf, 0)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
         self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
         # # (d) Lower half space
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.OPEN, -P.inf, P.inf, P.OPEN)
+        x_atom = closedopen(-P.inf, P.inf)
         y_interval = closedopen(0, P.inf)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
@@ -346,7 +346,7 @@ class TestRPortion(unittest.TestCase):
 
         # remove a single bounded rectangle from the plane
         poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = Atomic(P.CLOSED, 1, 3, P.OPEN)
+        x_atom = closedopen(1, 3)
         y_interval = closedopen(2, 4)
         poly._sub_atomic(x_atom, y_interval)
         self.assertListEqual(poly._used_y_ranges, [
