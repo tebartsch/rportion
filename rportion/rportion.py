@@ -37,13 +37,19 @@ class RBoundary:
 
     def __init__(self, val, btype):
         self.val = val
-        self.btype = btype
+        if self.val == P.inf or self.val == -P.inf:
+            self.btype = P.OPEN
+        else:
+            self.btype = btype
 
     def __bool__(self):
         raise ValueError("The truth value of a bound is ambiguous.")
 
     def __invert__(self):
-        return RBoundary(self.val, ~self.btype)
+        if self.val == P.inf or self.val == -P.inf:
+            return RBoundary(self.val, P.OPEN)
+        else:
+            return RBoundary(self.val, ~self.btype)
 
     def __eq__(self, other):
         return self.val == other.val and self.btype == other.btype
@@ -134,11 +140,11 @@ def _update_x_boundaries_and_y_interval_triangles(
             else:
                 adj_other_x_interval = other_x_interval
 
-                other_x_int_l_bound = RBoundary(other_x_interval.lower, ~other_x_interval.left)
+                other_x_int_l_bound = ~RBoundary(other_x_interval.lower, other_x_interval.left)
                 other_y_int_r_bound = RBoundary(other_x_interval.upper, other_x_interval.right)
 
-                left_ind = x_boundaries.bisect_left(other_x_int_l_bound) - 1
-                col = n - 1 - left_ind
+                left_ind = x_boundaries.bisect_left(other_x_int_l_bound)
+                col = n - left_ind
                 if l_bound < other_x_int_l_bound and (0 < col < n - i):
                     # left = x_boundaries[left_ind]
                     adj_other_x_interval |= Interval.from_atomic(~l_bound.btype, l_bound.val,
