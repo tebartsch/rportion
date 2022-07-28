@@ -7,10 +7,29 @@ import portion as P
 from portion.interval import open, closedopen, Atomic, empty, Interval
 
 from rportion import RPolygon
-from rportion.rportion import ropen, rclosedopen, rclosed, rempty
+from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary
 
 from rportion.tests.algorithms import get_maximal_rectangles_from_numpy
 
+
+def data_tree_to_string(x_boundaries: list[RBoundary],
+                        y_intervals: list[list[Interval]],
+                        spacing: int):
+    n = len(y_intervals)
+    msg = " "*spacing + "|"
+    for x_b in x_boundaries[-1:0:-1]:
+        msg += f"{str(x_b):>{spacing}}"
+    msg += "\n" + f"-"*spacing + "+"
+    for i in range(n):
+        msg += f"-"*spacing
+    msg += "\n"
+    for i, row in enumerate(y_intervals):
+        x_b = x_boundaries[i]
+        msg += f"{str(~x_b):>{spacing}}|"
+        for val in row:
+            msg += f"{str(val):>{spacing}}"
+        msg += "\n"
+    return msg
 
 def print_mat(mat: list[list[Interval]]):
     for row in mat:
@@ -20,18 +39,19 @@ def print_mat(mat: list[list[Interval]]):
     print()
 
 
-def print_rpolygon(rpoly: RPolygon, show_trees=False):
+def print_rpolygon(rpoly: RPolygon, show_trees=False, spacing=20):
     if show_trees:
-        print("Data Trees")
-        print(rpoly._x_boundaries)
-        print_mat(rpoly._used_y_ranges)
-        print_mat(rpoly._free_y_ranges)
-    print("Maximal used rectangles")
-    for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
-        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
-    print("Maximal free rectangles")
-    for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
-        print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+        print("USED")
+        msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._used_y_ranges, spacing)
+        print(msg)
+        for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
+            print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+        print("FREE")
+        msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._free_y_ranges, spacing)
+        print(msg)
+        for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
+            print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+
 
 
 class TestRPortion(unittest.TestCase):
@@ -165,19 +185,14 @@ class TestRPortion(unittest.TestCase):
         # Add three sectors in each six possible different orders and test if the result underlying
         # data structure of RPolygon is the same for all.
         #
-        #     x1 x2 x3  x4 x5 x6
-        #      +----+
-        #      |  +-|------+
-        #      +--|-+      |
-        #         |        |
-        #         |      +-|--+
-        #         +------|-+  |
-        #                +----+
-        x1, x2, x3, x4 = (1, 2, 3, 4)
-        y_interval_1 = closedopen(-1, 1)
-        y_interval_2 = closedopen(0, 2)
-        x_lims = [(x1, x3), (x4, x6), (x2, x5)]
-        y_intervals = [y_interval_1, y_interval_2, y_interval_3]
+        #      x1 x2 x3 x4 x5
+        #      +--+--+--+--+
+        #      |  |  |  |  |
+        #      +--+--+--+--+
+        x1, x2, x3, x4, x5 = (1, 2, 3, 4, 5)
+        y_interval = closedopen(0, 1)
+        x_lims = [(x1, x3), (x2, x4), (x3, x5)]
+        y_intervals = [y_interval, y_interval, y_interval]
         poly_list = []
         for arrangement in permutations(zip(x_lims, y_intervals)):
             poly = rempty()
@@ -187,6 +202,7 @@ class TestRPortion(unittest.TestCase):
         for poly_1, poly_2 in combinations(poly_list, 2):
             self.assertListEqual(poly_1._used_y_ranges, poly_2._used_y_ranges)
             self.assertListEqual(poly_1._free_y_ranges, poly_2._free_y_ranges)
+
 
     def test_RPolygon___sub__(self):
         poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
@@ -210,6 +226,7 @@ class TestRPortion(unittest.TestCase):
         x_atom = closedopen(-P.inf, 1)
         y_interval = empty()
         poly._add_atomic(x_atom, y_interval)
+        print_rpolygon(poly, show_trees=True, spacing=15)
         self.assertListEqual(poly._used_y_ranges, [[empty()]])
         self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
 

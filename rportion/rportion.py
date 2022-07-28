@@ -95,6 +95,7 @@ def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[li
 
     :bound_index int:
     :y_interval_triangle list[list[Interval]]:
+    :return bool:
 
     For the following triangle the boundary 4 can be pruned, because
       - the y-intervals of row (Y) are contained in the corresponding
@@ -141,17 +142,24 @@ def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[li
     return True
 
 
-def _remove_boundary(bound_index: int, y_interval_triangle: list[list[Interval]]):
-    """
-    Remove row and columns from y_interval_triangle specified by bound_index.
+def _interval_triangle_prunable_indices(y_interval_triangle: list[list[Interval]]) -> list[int]:
+    """Return a list of indices which can be removed from y_interval_triangle."""
+    n = len(y_interval_triangle)
+    return [b_index for b_index in range(1, n+1)
+            if _y_interval_triangle_prunable(b_index, y_interval_triangle)]
 
-    :bound_index int:
+
+def _remove_boundaries(bound_indices: list[int], y_interval_triangle: list[list[Interval]]):
+    """
+    Remove rows and columnss from y_interval_triangle specified by bound_indices.
+
+    :bound_indices list[int]:
     :y_interval_triangle list[list[Interval]]: Data
 
     This function is meant to be performed if the boundary is prunable, see function
     `_y_interval_triangle_prunable`.
 
-    I.e. for bound_index == 1 we get
+    I.e. for bound_indices == [1] we get
 
              old y-interval-triangle                         new y-interval-triangle
 
@@ -163,9 +171,12 @@ def _remove_boundary(bound_index: int, y_interval_triangle: list[list[Interval]]
             5  |   ()
     """
     n = len(y_interval_triangle)
-    for i in range(bound_index):
-        y_interval_triangle[i].pop(n - bound_index)
-    y_interval_triangle.pop(bound_index)
+    n_removed = 0
+    for bound_index in sorted(bound_indices):
+        for i in range(bound_index - n_removed):
+            y_interval_triangle[i].pop(n - bound_index)
+        y_interval_triangle.pop(bound_index - n_removed)
+        n_removed += 1
 
 
 def _update_x_boundaries_and_y_interval_triangles(
@@ -252,29 +263,15 @@ def _update_x_boundaries_and_y_interval_triangles(
                 y_interval_triangle_sub[i][j] -= other_y_interval
 
     # (d) Prune the y-interval-triangles if possible
-    l_ind = x_boundaries.bisect_left(x_b_left)
-
-    l_prunable_add = _y_interval_triangle_prunable(l_ind, y_interval_triangle_add)
-    l_prunable_sub = _y_interval_triangle_prunable(l_ind, y_interval_triangle_sub)
-    assert l_prunable_add == l_prunable_sub, (
+    indices_add = _interval_triangle_prunable_indices(y_interval_triangle_add)
+    indices_sub = _interval_triangle_prunable_indices(y_interval_triangle_sub)
+    assert indices_add == indices_sub, (
         "If one y-interval-triangle is prunable then the other should be too"
     )
-    if l_prunable_add and l_prunable_sub:
-        _remove_boundary(l_ind, y_interval_triangle_add)
-        _remove_boundary(l_ind, y_interval_triangle_sub)
-        x_boundaries.remove(x_b_left)
-
-    r_ind = x_boundaries.bisect_left(x_b_right)
-
-    r_prunable_add = _y_interval_triangle_prunable(r_ind, y_interval_triangle_add)
-    r_prunable_sub = _y_interval_triangle_prunable(r_ind, y_interval_triangle_sub)
-    assert r_prunable_add == r_prunable_sub, (
-        "If one y-interval-triangle is prunable then the other should be too"
-    )
-    if r_prunable_add and r_prunable_sub:
-        _remove_boundary(r_ind, y_interval_triangle_add)
-        _remove_boundary(r_ind, y_interval_triangle_sub)
-        x_boundaries.remove(x_b_right)
+    _remove_boundaries(indices_add, y_interval_triangle_add)
+    _remove_boundaries(indices_add, y_interval_triangle_sub)
+    for ind in sorted(indices_add, reverse=True):
+        x_boundaries.pop(ind)
 
 
 def _traverse_diagonally(boundaries: list[RBoundary],

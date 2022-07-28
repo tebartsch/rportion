@@ -355,20 +355,20 @@ def create_random_polygon(n: int,
 
 
 def evaluate_random_polygon(save_image=True, show_progress=True):
-    n = 50
-    x_max = 32
-    max_x_len = 8
-    y_max = 32
-    max_y_len = 8
+    n = 100
+    x_max = 512
+    max_x_len = 75
+    y_max = 512
+    max_y_len = 75
 
     algos = [
         algo_interval_tree,
-        algo_array_all,
-        algo_array_greedy_1,
+        # algo_array_all,
+        # algo_array_greedy_1,
         algo_array_greedy_2
     ]
 
-    repetitions = 10
+    repetitions = 1
     max_rectangles_dict, times_dict = create_random_polygon(n=n,
                                                             x_max=x_max, max_x_len=max_x_len,
                                                             y_max=y_max, max_y_len=max_y_len,
@@ -429,8 +429,8 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
 
         for i, (name, max_rectangles) in enumerate(max_rectangles_dict.items()):
             algo_axes[i].set_title(f"{name}")
-            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "used (tree only)")
-            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "free (tree only)")
+            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "used")
+            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "free")
             algo_axes[i].set_title(f"{name}")
             algo_axes[i].set_xlim(x_lim)
             algo_axes[i].set_ylim(y_lim)
@@ -469,7 +469,7 @@ def benchmark():
             _, times_dict = create_random_polygon(n=n,
                                                   x_max=x_max, max_x_len=max_x_len,
                                                   y_max=y_max, max_y_len=max_y_len,
-                                                  algorithms=algorithms)
+                                                  algorithms=algos)
             for algo in algos:
                 times[algo][i] += times_dict[algo].sum() / repetitions
 
@@ -484,7 +484,7 @@ def benchmark():
 
 
 def main():
-    random.seed(4)
+    random.seed(452351)
     print("creating gif")
     create_gif()
     print("evaluate a random sequence of unions and subtractions")
