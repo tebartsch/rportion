@@ -7,25 +7,42 @@ import portion as P
 from portion.interval import open, closedopen, Atomic, empty, Interval
 
 from rportion import RectBisection
-from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RectPolygon
+from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RectPolygon, RBoundary
 
 from rportion.tests.algorithms import get_maximal_rectangles_from_numpy
 
 
-def print_mat(mat: list[list[Interval]]):
-    for row in mat:
+def data_tree_to_string(x_boundaries: list[RBoundary],
+                        y_intervals: list[list[Interval]],
+                        spacing: int):
+    n = len(y_intervals)
+    msg = " "*spacing + "|"
+    for x_b in x_boundaries[-1:0:-1]:
+        msg += f"{str(x_b):>{spacing}}"
+    msg += "\n" + f"-"*spacing + "+"
+    for i in range(n):
+        msg += f"-"*spacing
+    msg += "\n"
+    for i, row in enumerate(y_intervals):
+        x_b = x_boundaries[i]
+        msg += f"{str(~x_b):>{spacing}}|"
         for val in row:
-            print(f"{str(val):<25}", end="")
-        print()
-    print()
+            msg += f"{str(val):>{spacing}}"
+        msg += "\n"
+    return msg
 
 
-def print_rect_bisection(r_bisec: RectBisection, show_trees=False):
+def print_rect_bisection(r_bisec: RectBisection, show_trees=False, spacing=20):
     if show_trees:
         print("Data Trees")
-        print(r_bisec.used_polygon._x_boundaries)
-        print_mat(r_bisec.used_polygon._y_intervals)
-        print_mat(r_bisec.free_polygon._y_intervals)
+        msg = data_tree_to_string(list(r_bisec.used_polygon._x_boundaries),
+                                  r_bisec.used_polygon._y_intervals,
+                                  spacing)
+        print(msg)
+        msg = data_tree_to_string(list(r_bisec.free_polygon._x_boundaries),
+                                  r_bisec.used_polygon._y_intervals,
+                                  spacing)
+        print(msg)
     print("Maximal used rectangles")
     for i, e in enumerate(r_bisec.maximal_rectangles(), start=1):
         print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
@@ -34,11 +51,12 @@ def print_rect_bisection(r_bisec: RectBisection, show_trees=False):
         print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
 
 
-def print_rpolygon(rpoly: RectPolygon, show_trees=False):
+def print_rpolygon(rpoly: RectPolygon, show_trees=False, spacing=20):
     if show_trees:
-        print("Data Trees")
-        print(rpoly._x_boundaries)
-        print_mat(rpoly._y_intervals)
+        print("Data Tree")
+        msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._y_intervals, spacing)
+        print(msg)
+
     print("Maximal used rectangles")
     for i, e in enumerate(rpoly.maximal_rectangles(), start=1):
         print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
@@ -121,30 +139,22 @@ class TestRPortion(unittest.TestCase):
         # Add three sectors in each six possible different orders and test if the result underlying
         # data structure of RPolygon is the same for all.
         #
-        #     x1 x2 x3  x4 x5 x6
-        #      +----+
-        #      |  +-|------+
-        #      +--|-+      |
-        #         |        |
-        #         |      +-|--+
-        #         +------|-+  |
-        #                +----+
-        # TODO Fix this test
-        if False:
-            x1, x2, x3, x4, x5, x6 = (1, 2, 3, 4, 5, 6)
-            y_interval_1 = closedopen(-1, 1)
-            y_interval_2 = closedopen(0, 2)
-            y_interval_3 = closedopen(1, 2)
-            x_lims = [(x1, x3), (x4, x6), (x2, x5)]
-            y_intervals = [y_interval_1, y_interval_2, y_interval_3]
-            poly_list = []
-            for arrangement in permutations(zip(x_lims, y_intervals)):
-                poly = rempty()
-                for (x_a, x_b), y_int in arrangement:
-                    poly._add_atomic(closedopen(x_a, x_b), y_int)
-                poly_list.append(poly)
-            for poly_1, poly_2 in combinations(poly_list, 2):
-                self.assertListEqual(poly_1._y_intervals, poly_2._y_intervals)
+        #      x1 x2 x3 x4 x5
+        #      +--+--+--+--+
+        #      |  |  |  |  |
+        #      +--+--+--+--+
+        x1, x2, x3, x4, x5 = (1, 2, 3, 4, 5)
+        y_interval = closedopen(0, 1)
+        x_lims = [(x1, x3), (x2, x4), (x3, x5)]
+        y_intervals = [y_interval, y_interval, y_interval]
+        poly_list = []
+        for arrangement in permutations(zip(x_lims, y_intervals)):
+            poly = rempty()
+            for (x_a, x_b), y_int in arrangement:
+                poly._add_atomic(closedopen(x_a, x_b), y_int)
+            poly_list.append(poly)
+        for poly_1, poly_2 in combinations(poly_list, 2):
+            self.assertListEqual(poly_1._y_intervals, poly_2._y_intervals)
 
     def test_RectPolygon__sub_atomic(self):
         # Remove rectangle with empty x_interval from the whole plane

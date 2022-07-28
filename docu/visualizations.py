@@ -439,8 +439,8 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
 
         for i, (name, max_rectangles) in enumerate(max_rectangles_dict.items()):
             algo_axes[i].set_title(f"{name}")
-            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "used (tree only)")
-            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "free (tree only)")
+            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "used")
+            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "free")
             algo_axes[i].set_title(f"{name}")
             algo_axes[i].set_xlim(x_lim)
             algo_axes[i].set_ylim(y_lim)
@@ -497,7 +497,7 @@ def benchmark():
 def main():
     random.seed(452351)
     print("creating gif")
-    # create_gif()
+    create_gif()
     print("evaluate a random sequence of unions and subtractions")
     evaluate_random_polygon(show_progress=True)
     print("benchmark random sequence of unions and subtractions of increasing length")
