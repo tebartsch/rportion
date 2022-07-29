@@ -5,14 +5,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Commits](https://badgen.net/github/last-commit/tilmann-bartsch/rportion)](https://github.com/tilmann-bartsch/rportion/commits/)
 
-![](https://github.com/tilmann-bartsch/rportion/blob/master/docu/simple-example.gif)
-
-The `rportion` represent for rectilinear 2D polygons (unions of 2D-intervals) in Python 3.7+.
+The `rportion` library provides data structure to represent rectilinear 2D polygons (unions of 2D-intervals) in Python 3.7+.
 It is built upon the library [`portion`](https://github.com/AlexandreDecan/portion).
 
  - 2D-Intervals (rectangles) which can be open/closed and finite/infinite at every boundary
  - support for intersection, union, complement and difference
  - obtain all maximum rectangles inside and outside the given polygon
+
+In the case of integers/floats it can be used keep track of the area resulting 
+from the union/difference of rectangles:
+![](https://github.com/tilmann-bartsch/rportion/blob/master/docu/simple-example.gif)
 
 ## Table of contents
 
