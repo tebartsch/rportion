@@ -8,7 +8,7 @@ with open(
     long_description = f.read()
 
 setup(
-    name="portion",
+    name="rportion",
     version="0.0.1",
     license="MIT",
     author="Tilmann Bartsch",
