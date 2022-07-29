@@ -1,7 +1,8 @@
 name: Deployment
 
 on:
-  push:
+  release:
+    types: [published]
 
 jobs:
   deploy:
@@ -24,3 +25,4 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
+          skip-existing: true
