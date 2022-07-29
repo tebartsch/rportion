@@ -4,12 +4,12 @@ import random
 
 import numpy as np
 import portion as P
-from portion.interval import open, closedopen, Atomic, empty, Interval
+from portion.interval import open, closedopen, empty, Interval
 
 from rportion import RPolygon
 from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary
 
-from rportion.tests.algorithms import get_maximal_rectangles_from_numpy
+from tests.helpers import get_maximal_rectangles_from_numpy
 
 
 def data_tree_to_string(x_boundaries: list[RBoundary],
@@ -30,6 +30,7 @@ def data_tree_to_string(x_boundaries: list[RBoundary],
             msg += f"{str(val):>{spacing}}"
         msg += "\n"
     return msg
+
 
 def print_mat(mat: list[list[Interval]]):
     for row in mat:
