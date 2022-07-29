@@ -12,6 +12,7 @@ from matplotlib.axes import Axes
 from matplotlib.cm import get_cmap
 from matplotlib.patches import Rectangle as MplRectangle
 import imageio
+from typing import List, Tuple, Optional
 
 from rportion import rclosed, rclosedopen, RPolygon
 from matplotlib import pyplot as plt
@@ -30,7 +31,7 @@ algorithms = [
 ]
 
 
-def max_pos(ind: int, vector: ndarray[(None,), int]):
+def max_pos(ind: int, vector: ndarray):
     """
     Get lower and upper indices of the largest zero region in vector containing ind.
 
@@ -179,7 +180,7 @@ def get_maximal_rectangles_from_numpy(occupation_mat: ndarray, mode: str):
 
 
 def plot_rectangles(ax: Axes,
-                    rectangles: list[(int, int, int, int)],
+                    rectangles: List[Tuple[int, int, int, int]],
                     color_ind: int,
                     label: str,
                     alpha: float = 0.35):
@@ -200,8 +201,8 @@ def plot_rectangles(ax: Axes,
 
 
 def bounding_coords(rectangles: RPolygon):
-    x_int = rectangles.enclosing_x_interval
-    y_int = rectangles.enclosing_y_interval
+    x_int = rectangles.x_enclosure_interval
+    y_int = rectangles.y_enclosure_interval
     if x_int.empty or y_int.empty:
         return None
     else:
@@ -209,10 +210,10 @@ def bounding_coords(rectangles: RPolygon):
 
 
 def plot_rpolygon(ax: Axes, poly: RPolygon,
-                  box: tuple[tuple[int, int], tuple[int, int]] | None = None):
+                  box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]]):
     if box is None:
-        x_int = poly.enclosing_x_interval
-        y_int = poly.enclosing_y_interval
+        x_int = poly.x_enclosure_interval
+        y_int = poly.y_enclosure_interval
         assert (x_int.lower != -P.inf and x_int.upper != P.inf
                 and y_int.lower != -P.inf and y_int.upper != P.inf), (
             f"If parameter box == None the rectangle must be bounded. "
@@ -227,10 +228,10 @@ def plot_rpolygon(ax: Axes, poly: RPolygon,
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_used_rectangles()]
-    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "used")
+    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon")
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_free_rectangles()]
-    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "free")
+    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement")
 
 
 def create_gif():
@@ -240,33 +241,36 @@ def create_gif():
         ("sub", rclosedopen(2, 5, 2, 5)),
         ("add", rclosedopen(-1, 1, -1, 1)),
         ("add", rclosedopen(5, 8, 5, 8)),
-        ("add", rclosedopen(5, 6, 5, 6)),
         ("add", rclosedopen(6, 7, 0, 6)),
         ("add", rclosedopen(-1, 8, 3, 4)),
         ("sub", rclosedopen(1, 8, 2, 3)),
     ]
 
-    filename_base = "image"
-    output_folder = "images"
+    filename_base = "simple-example"
+    output_folder = "simple-example-images"
     os.makedirs(output_folder, exist_ok=True)
 
     poly = RPolygon()
     for i, (operation, r) in enumerate(r_list):
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
         ax.set_xlim([-2 - 0.5, 10 - 0.5])
         ax.set_ylim([-2 - 0.5, 10 - 0.5])
         if operation == "add":
             poly |= r
         elif operation == "sub":
             poly -= r
-        fig, ax = plt.subplots(1, 1)
         x_lim = (-2, 9)
         y_lim = (-2, 9)
         plot_rpolygon(ax, poly, (x_lim, y_lim))
         ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim, )
-        ax.legend(loc="upper right")
-        fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"))
+        ax.set_ylim(y_lim)
+        ax.spines['left'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
+        # ax.legend(loc="upper right")
+        fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"),
+                    bbox_inches='tight', pad_inches=0)
 
     with imageio.get_writer(os.path.join(f"{filename_base}.gif"),
                             mode='I', duration=1) as writer:
@@ -278,7 +282,7 @@ def create_gif():
 def create_random_polygon(n: int,
                           x_max: int, max_x_len: int,
                           y_max: int, max_y_len: int,
-                          algorithms: list[str],
+                          algorithms: List[str],
                           show_progress: bool = False):
     assert set(algorithms).issubset(set(algorithms))
 
@@ -338,12 +342,12 @@ def create_random_polygon(n: int,
     for algo in algorithms:
         if algo == algo_interval_tree:
             max_rectangles[algo] = (
-                [coords
+                [bounding_coords(rec & enclosing_rec)
                  for rec in polygons[algo].maximal_used_rectangles()
-                 if (coords := bounding_coords(rec & enclosing_rec)) is not None],
-                [coords
+                 if bounding_coords(rec & enclosing_rec) is not None],
+                [bounding_coords(rec & enclosing_rec)
                  for rec in polygons[algo].maximal_free_rectangles()
-                 if (coords := bounding_coords(rec & enclosing_rec)) is not None]
+                 if bounding_coords(rec & enclosing_rec) is not None]
             )
         else:
             max_rectangles[algo] = (

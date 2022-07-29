@@ -5,6 +5,7 @@ import random
 import numpy as np
 import portion as P
 from portion.interval import open, closedopen, empty, Interval
+from typing import List, Set, Tuple
 
 from rportion import RPolygon
 from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary
@@ -12,16 +13,16 @@ from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary
 from tests.helpers import get_maximal_rectangles_from_numpy
 
 
-def data_tree_to_string(x_boundaries: list[RBoundary],
-                        y_intervals: list[list[Interval]],
+def data_tree_to_string(x_boundaries: List[RBoundary],
+                        y_intervals: List[List[Interval]],
                         spacing: int):
     n = len(y_intervals)
-    msg = " "*spacing + "|"
+    msg = " " * spacing + "|"
     for x_b in x_boundaries[-1:0:-1]:
         msg += f"{str(x_b):>{spacing}}"
-    msg += "\n" + f"-"*spacing + "+"
+    msg += "\n" + f"-" * spacing + "+"
     for i in range(n):
-        msg += f"-"*spacing
+        msg += f"-" * spacing
     msg += "\n"
     for i, row in enumerate(y_intervals):
         x_b = x_boundaries[i]
@@ -32,7 +33,7 @@ def data_tree_to_string(x_boundaries: list[RBoundary],
     return msg
 
 
-def print_mat(mat: list[list[Interval]]):
+def print_mat(mat: List[List[Interval]]):
     for row in mat:
         for val in row:
             print(f"{str(val):<25}", end="")
@@ -46,18 +47,26 @@ def print_rpolygon(rpoly: RPolygon, show_trees=False, spacing=20):
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._used_y_ranges, spacing)
         print(msg)
         for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
-            print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
+            print(i, "-->", e.x_enclosure_interval, e.y_enclosure_interval)
         print("FREE")
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._free_y_ranges, spacing)
         print(msg)
         for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
-            print(i, "-->", e.enclosing_x_interval, e.enclosing_y_interval)
-
+            print(i, "-->", e.x_enclosure_interval, e.y_enclosure_interval)
 
 
 class TestRPortion(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestRPortion, self).__init__(*args, **kwargs)
+
+    def test_RPolygon_empty(self):
+        poly = rclosed(P.inf, 2, 5, 4)
+        self.assertTrue(poly.empty)
+
+    def test_RPolygon_atomic(self):
+        self.assertTrue(rempty().atomic)
+        self.assertTrue(rclosed(2, 4, 3, 5).atomic)
+        self.assertFalse((rclosed(2, 4, 3, 5) | rclosed(1, 5, 4, 6)).atomic)
 
     def test_RPolygon_maximal_atomic_x_rectangles(self):
         # Add two finite (in x dimension) polygons.
@@ -203,7 +212,6 @@ class TestRPortion(unittest.TestCase):
         for poly_1, poly_2 in combinations(poly_list, 2):
             self.assertListEqual(poly_1._used_y_ranges, poly_2._used_y_ranges)
             self.assertListEqual(poly_1._free_y_ranges, poly_2._free_y_ranges)
-
 
     def test_RPolygon___sub__(self):
         poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
@@ -411,13 +419,13 @@ class TestRPortion(unittest.TestCase):
             arr_free_rectangles = set(get_maximal_rectangles_from_numpy(arr))
 
             poly_used_rectangles = set([
-                (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
-                 r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
+                (r.x_enclosure_interval.lower, r.x_enclosure_interval.upper,
+                 r.y_enclosure_interval.lower, r.y_enclosure_interval.upper)
                 for r in poly.maximal_used_rectangles()
             ])
             poly_free_rectangles = set([
-                (r.enclosing_x_interval.lower, r.enclosing_x_interval.upper,
-                 r.enclosing_y_interval.lower, r.enclosing_y_interval.upper)
+                (r.x_enclosure_interval.lower, r.x_enclosure_interval.upper,
+                 r.y_enclosure_interval.lower, r.y_enclosure_interval.upper)
                 for r in (poly | (~ropen(0, x_max, 0, y_max))).maximal_free_rectangles()])
 
             def matrix_to_str(usage_arr: np.array):
@@ -436,7 +444,7 @@ class TestRPortion(unittest.TestCase):
                 msg += "\n"
                 return msg
 
-            def difference_string(usage_arr: np.ndarray, rectangles: set[tuple[int, int, int, int]]):
+            def difference_string(usage_arr: np.ndarray, rectangles: Set[Tuple[int, int, int, int]]):
                 msg = "Used areas\n"
                 msg += matrix_to_str(usage_arr)
                 msg += "\n"

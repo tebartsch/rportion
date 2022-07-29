@@ -27,14 +27,14 @@ setup(
     ],
     keywords="rectangle polygon interval-tree",
     packages=find_packages(include=["rportion"]),
-    python_requires="~= 3.10",
+    python_requires="~= 3.7",
     install_requires=[
         "sortedcontainers ~= 2.2", "portion ~= 2.2.0"
     ],
     extras_require={
         "test": ["pytest ~= 7.0",
                  "coverage ~= 6.0",
-                 "numpy ~= 1.23.1",
+                 "numpy ~= 1.21.6",
                  "matplotlib ~= 3.5.2",
                  "imageio ~= 2.19.5",
                  "tqdm ~= 4.64.0"],

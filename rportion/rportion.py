@@ -1,8 +1,8 @@
 from copy import copy
-from typing import Iterator
+from typing import Iterator, List, Tuple
 
 import portion as P
-from portion.interval import Interval, open, empty, closedopen, closed
+from portion.interval import Interval, open, empty, closedopen, closed, openclosed
 from sortedcontainers import SortedList
 
 
@@ -77,8 +77,8 @@ class RBoundary:
         return self.__class__(self.val, self.btype)
 
 
-def _extend_ranges_mat(mat: list[list[Interval]],
-                       x_boundaries: SortedList[RBoundary],
+def _extend_ranges_mat(mat: List[List[Interval]],
+                       x_boundaries: 'SortedList[RBoundary]',
                        rbound: RBoundary):
     n = len(mat)
     index = x_boundaries.bisect_right(rbound)
@@ -89,7 +89,7 @@ def _extend_ranges_mat(mat: list[list[Interval]],
         mat[row].insert(n - index, prev_y_int)
 
 
-def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[list[Interval]]) -> bool:
+def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: List[List[Interval]]) -> bool:
     """
     Test if the given bound can be removed from y_interval_triangle.
 
@@ -142,14 +142,14 @@ def _y_interval_triangle_prunable(bound_index: int, y_interval_triangle: list[li
     return True
 
 
-def _interval_triangle_prunable_indices(y_interval_triangle: list[list[Interval]]) -> list[int]:
+def _interval_triangle_prunable_indices(y_interval_triangle: List[List[Interval]]) -> List[int]:
     """Return a list of indices which can be removed from y_interval_triangle."""
     n = len(y_interval_triangle)
     return [b_index for b_index in range(1, n+1)
             if _y_interval_triangle_prunable(b_index, y_interval_triangle)]
 
 
-def _remove_boundaries(bound_indices: list[int], y_interval_triangle: list[list[Interval]]):
+def _remove_boundaries(bound_indices: List[int], y_interval_triangle: List[List[Interval]]):
     """
     Remove rows and columnss from y_interval_triangle specified by bound_indices.
 
@@ -180,9 +180,9 @@ def _remove_boundaries(bound_indices: list[int], y_interval_triangle: list[list[
 
 
 def _update_x_boundaries_and_y_interval_triangles(
-        x_boundaries: SortedList[RBoundary],
-        y_interval_triangle_add: list[list[Interval]],
-        y_interval_triangle_sub: list[list[Interval]],
+        x_boundaries: 'SortedList[RBoundary]',
+        y_interval_triangle_add: List[List[Interval]],
+        y_interval_triangle_sub: List[List[Interval]],
         other_x_atom: Interval, other_y_interval: Interval):
     """
     Update
@@ -274,8 +274,8 @@ def _update_x_boundaries_and_y_interval_triangles(
         x_boundaries.pop(ind)
 
 
-def _traverse_diagonally(boundaries: list[RBoundary],
-                         interval_triangle: list[list[Interval]]) -> Iterator[tuple[Interval, Interval]]:
+def _traverse_diagonally(boundaries: List[RBoundary],
+                         interval_triangle: List[List[Interval]]) -> Iterator[Tuple[Interval, Interval]]:
     """
     Traverse self._free_y_ranges diagonally from the top left to obtain all maximal free rectangles.
 
@@ -344,11 +344,29 @@ class RPolygon:
         #      b2 |         ___/
         #       : |      __/
         #      bn |_____/
-        self._used_y_ranges: list[list[Interval]] = [[empty()]]
-        self._free_y_ranges: list[list[Interval]] = [[open(-P.inf, P.inf)]]
+        self._used_y_ranges: List[List[Interval]] = [[empty()]]
+        self._free_y_ranges: List[List[Interval]] = [[open(-P.inf, P.inf)]]
 
     @property
-    def enclosing_x_interval(self):
+    def empty(self):
+        try:
+            next(self.maximal_used_rectangles())
+            return False
+        except StopIteration:
+            return True
+
+    @property
+    def atomic(self):
+        try:
+            max_rec_iter = self.maximal_used_rectangles()
+            next(max_rec_iter)
+            next(max_rec_iter)
+            return False
+        except StopIteration:
+            return True
+
+    @property
+    def x_enclosure_interval(self) -> Interval:
         """
         smallest y_interval enclosing the y-dimension of the polygon.
         """
@@ -370,11 +388,15 @@ class RPolygon:
                                     r_bound.val, r_bound.btype)
 
     @property
-    def enclosing_y_interval(self):
+    def y_enclosure_interval(self) -> Interval:
         """
         smallest y_interval enclosing the y-dimension of the polygon.
         """
         return ~self._free_y_ranges[0][0]
+
+    @property
+    def enclosure(self) -> 'RPolygon':
+        return self.__class__.from_interval_product(self.x_enclosure_interval, self.y_enclosure_interval)
 
     @classmethod
     def from_interval_product(cls, x_interval: Interval, y_interval: Interval) -> 'RPolygon':
@@ -416,7 +438,7 @@ class RPolygon:
         ]
         return poly_copy
 
-    def _maximal_used_atomic_x_rectangles(self) -> Iterator[tuple[Interval, Interval]]:
+    def _maximal_used_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
         return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges)
 
     def maximal_free_rectangles(self) -> Iterator['RPolygon']:
@@ -433,7 +455,7 @@ class RPolygon:
                     continue
                 yield self.__class__.from_interval_product(x_atom, y_atom)
 
-    def _maximal_free_atomic_x_rectangles(self) -> Iterator[tuple[Interval, Interval]]:
+    def _maximal_free_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
         return _traverse_diagonally(list(self._x_boundaries), self._free_y_ranges)
 
     def __or__(self, other) -> 'RPolygon':
@@ -455,6 +477,17 @@ class RPolygon:
 
     def __and__(self, other) -> 'RPolygon':
         return self - (~other)
+
+    def __repr__(self):
+        if self.empty:
+            return "((),())"
+
+        string = []
+        for atomic_poly in self.maximal_used_rectangles():
+            x_int = atomic_poly.x_enclosure_interval
+            y_int = atomic_poly.y_enclosure_interval
+            string.append(f"(x={repr(x_int)}, y={repr(y_int)})")
+        return " | ".join(string)
 
     def _invert(self):
         temp = self._used_y_ranges
@@ -531,6 +564,20 @@ def rclosed(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
     :return RPolygon:
     """
     return RPolygon.from_interval_product(closed(x_lower, x_upper), closed(y_lower, y_upper))
+
+
+def ropenclosed(x_lower, x_upper, y_lower, y_upper) -> RPolygon:
+    """
+    Create a rectangular polygon which is open on both lower bounds
+    and closed on both upper bounds.
+
+    :param x_lower: value of the lower bound in x-dimension
+    :param x_upper: value of the upper bound in x-dimension
+    :param y_lower: value of the lower bound in y-dimension
+    :param y_upper: value of the upper bound in y-dimension
+    :return RPolygon:
+    """
+    return RPolygon.from_interval_product(openclosed(x_lower, x_upper), openclosed(y_lower, y_upper))
 
 
 def rclosedopen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:

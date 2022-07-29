@@ -2,7 +2,7 @@ import numpy as np
 from sortedcontainers import SortedList
 
 
-def max_pos(ind: int, vector: np.ndarray[(None,), int]):
+def max_pos(ind: int, vector: np.ndarray):
     """
     Get lower and upper indices of the largest zero region in vector containing ind.
 
