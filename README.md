@@ -73,6 +73,7 @@ Polygons can also be created by using two intervals of the underlying library
 (x=(0,2], y=[0,1))
 ```
 
+[&uparrow; back to top](#table-of-contents)
 ### Polygon bounds & attributes
 
 An `RPolygon` defines the following properties
@@ -94,26 +95,26 @@ An `RPolygon` defines the following properties
    >>> (rp.rclosed(0, 2, 1, 2) | rp.rclosed(1, 2, 1, 3)).atomic
    False
    ```
- - `enclosure` is the smallest rectangle containing the interval.
+ - `enclosure` is the smallest rectangle containing the polygon.
    ```python
    >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).enclosure
    (x=[0,3], y=[0,2])
    >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).enclosure
    (x=(-inf,+inf), y=[-3,3])
    ```
-  - `enclosure_x_interval` is the smallest rectangle containing the polygon's extension in x-dimension.
-    ```python
-    >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).x_enclosure_interval
-    x=[0,3]
-    >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).x_enclosure_interval
-    (-inf,+inf)
-    ```
-  - `enclosure_y_interval` is the smallest interval containing the polygon's extension in y-dimension.
-    ```python
-    >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).y_enclosure_interval
-    [0,2]
-    >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).y_enclosure_interval
-    [-3,3]
+ - `enclosure_x_interval` is the smallest rectangle containing the polygon's extension in x-dimension.
+   ```python
+   >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).x_enclosure_interval
+   x=[0,3]
+   >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).x_enclosure_interval
+   (-inf,+inf)
+   ```
+ - `enclosure_y_interval` is the smallest interval containing the polygon's extension in y-dimension.
+   ```python
+   >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).y_enclosure_interval
+   [0,2]
+   >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).y_enclosure_interval
+   [-3,3]
    ```
  - `x_lower`, `x_upper`, `y_lower` and `y_upper` yield the boundaries of the rectangle enclosing
    the polygon.
@@ -123,12 +124,12 @@ An `RPolygon` defines the following properties
    (0, 2, 1, 3)
    ```
  - `x_left`, `x_right`, `y_left` and `y_right` yield the type of the boundaries of the rectangle enclosing
-     the polygon.
-     ```python
-     >>> p = rp.rclosedopen(0, 2, 1, 3)
-     >>> p.x_left, p.x_right, p.y_left, p.y_right
-     (CLOSED, OPEN, CLOSED, OPEN)
-     ```
+    the polygon.
+    ```python
+    >>> p = rp.rclosedopen(0, 2, 1, 3)
+    >>> p.x_left, p.x_right, p.y_left, p.y_right
+    (CLOSED, OPEN, CLOSED, OPEN)
+    ```
 
 ### Polygon operations
 
@@ -158,6 +159,7 @@ An `RPolygon` defines the following properties
    Note that the resulting polygon is represented by the union of all maximal rectangles contained in
    in the polygon, see [Maximum rectangle iterators](#maximum-rectangle-iterators).
 
+[&uparrow; back to top](#table-of-contents)
 ### Maximum rectangle iterators
 
 The method `maximal_used_rectangles` of a `RPolygon` returns an iterator over all maximal rectangles contained
@@ -173,17 +175,16 @@ I.e. for the polygon
 >>> list(poly.maximal_used_rectangles())
 [(x=[1,4), y=[2,3)), (x=[2,5), y=[1,2)), (x=[6,8), y=[1,2)), (x=[2,4), y=[1,4)), (x=[7,8), y=[1,3))]
 ```
-which can be visualized as follows.
-<figure align="center">
+which can be visualized as follows:
+<p align="center">
   <img width="95%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example.png">
-  <figcaption>
-    <b>Left:</b> Simple Rectilinear polygon. The red areas are part of the polygon.<br>
-    <b>Right:</b> Maximal contained rectangles are drawn above each other transparently. The maximum reectangles lying
-                  outside the polygon are represented analogously in green.
-  </figcaption>
-</figure>
+</p>
 
+**Left:** Simple Rectilinear polygon. The red areas are part of the polygon.<br>
+**Right:** Maximal contained rectangles are drawn above each other transparently. The maximum
+              rectangles lying outside the polygon are represented analogously in green.
 
+[&uparrow; back to top](#table-of-contents)
 ## Changelog
 This library adheres to a [semantic versioning](https://semver.org/) scheme.
 See [CHANGELOG.md](https://github.com/tilmann-bartsch/rportion/blob/master/CHANGELOG.md) for the list of changes.
