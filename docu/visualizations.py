@@ -270,16 +270,17 @@ def create_gif():
             fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"),
                         bbox_inches='tight', pad_inches=0)
 
-        fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
-        plot_rpolygon(ax, poly, (x_lim, y_lim), alpha)
-        fig.savefig(os.path.join(f"{filename_base}.png"),
-                    bbox_inches='tight', pad_inches=0.1)
-
         with imageio.get_writer(os.path.join(f"{filename_base}.gif"),
                                 mode='I', duration=1.5) as writer:
             for i in range(len(r_list)):
                 image = imageio.v2.imread(os.path.join(output_folder, f"{filename_base}-{i}.png"))
                 writer.append_data(image)
+
+        fig, axes = plt.subplots(1, 2, figsize=(11, 3))
+        plot_rpolygon(axes[0], poly, (x_lim, y_lim), 1.0)
+        plot_rpolygon(axes[1], poly, (x_lim, y_lim), 0.35)
+        fig.savefig(os.path.join(f"simple-example.png"),
+                    bbox_inches='tight', pad_inches=0.1)
 
 
 def create_random_polygon(n: int,

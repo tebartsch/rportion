@@ -102,18 +102,18 @@ An `RPolygon` defines the following properties
    (x=(-inf,+inf), y=[-3,3])
    ```
   - `enclosure_x_interval` is the smallest rectangle containing the polygon's extension in x-dimension.
-   ```python
-   >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).x_enclosure_interval
-   x=[0,3]
-   >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).x_enclosure_interval
-   (-inf,+inf)
-   ```
+    ```python
+    >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).x_enclosure_interval
+    x=[0,3]
+    >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).x_enclosure_interval
+    (-inf,+inf)
+    ```
   - `enclosure_y_interval` is the smallest interval containing the polygon's extension in y-dimension.
-   ```python
-   >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).y_enclosure_interval
-   [0,2]
-   >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).y_enclosure_interval
-   [-3,3]
+    ```python
+    >>> (rp.rclosed(0, 2, 0, 2) | rp.rclosed(1, 3, 0, 1)).y_enclosure_interval
+    [0,2]
+    >>> (rp.rclosed(0, 1, -3, 3) | rp.rclosed(-P.inf, P.inf, -1, 1)).y_enclosure_interval
+    [-3,3]
    ```
  - `x_lower`, `x_upper`, `y_lower` and `y_upper` yield the boundaries of the rectangle enclosing
    the polygon.
@@ -175,13 +175,14 @@ I.e. for the polygon
 ```
 which can be visualized as follows.
 <figure align="center">
-  <img width="200" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_solid.png">
-  <img width="200" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_transparent.png">
+  <img width="95%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example.png">
   <figcaption>
     <b>Left:</b> Simple Rectilinear polygon. The red areas are part of the polygon.<br>
-    <b>Right:</b> Maximal contained rectangles are drawn above each other transparently.
+    <b>Right:</b> Maximal contained rectangles are drawn above each other transparently. The maximum reectangles lying
+                  outside the polygon are represented analogously in green.
   </figcaption>
 </figure>
+
 
 ## Changelog
 This library adheres to a [semantic versioning](https://semver.org/) scheme.
