@@ -5,7 +5,6 @@ import time
 import numpy as np
 import portion as P
 from matplotlib.gridspec import GridSpec
-from numpy import ndarray
 from sortedcontainers import SortedList
 from tqdm import tqdm
 from matplotlib.axes import Axes
@@ -31,7 +30,7 @@ algorithms = [
 ]
 
 
-def max_pos(ind: int, vector: ndarray):
+def max_pos(ind: int, vector: np.ndarray):
     """
     Get lower and upper indices of the largest zero region in vector containing ind.
 
@@ -56,7 +55,7 @@ def max_pos(ind: int, vector: ndarray):
         return None
 
 
-def get_maximal_rectangles_from_numpy(occupation_mat: ndarray, mode: str):
+def get_maximal_rectangles_from_numpy(occupation_mat: np.ndarray, mode: str):
     """
     Return a subset of maximal rectangles than can be fitted into the free spaces specified by matrix. Zero value
     means that the location is free. I.e. for
@@ -183,7 +182,7 @@ def plot_rectangles(ax: Axes,
                     rectangles: List[Tuple[int, int, int, int]],
                     color_ind: int,
                     label: str,
-                    alpha: float = 0.35):
+                    alpha: float):
     cmap = get_cmap('Set3')
     flag = True
     for x0, x1, y0, y1 in rectangles:
@@ -210,7 +209,8 @@ def bounding_coords(rectangles: RPolygon):
 
 
 def plot_rpolygon(ax: Axes, poly: RPolygon,
-                  box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]]):
+                  box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
+                  alpha: float = 0.35):
     if box is None:
         x_int = poly.x_enclosure_interval
         y_int = poly.y_enclosure_interval
@@ -228,55 +228,58 @@ def plot_rpolygon(ax: Axes, poly: RPolygon,
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_used_rectangles()]
-    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon")
+    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", alpha=alpha)
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_free_rectangles()]
-    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement")
+    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", alpha=alpha)
 
 
 def create_gif():
     r_list = [
         ("add", rempty()),
-        ("add", rclosedopen(0, 3, 0, 6)),
-        ("sub", rclosedopen(2, 5, 2, 5)),
-        ("add", rclosedopen(-1, 1, -1, 1)),
-        ("add", rclosedopen(5, 8, 5, 8)),
-        ("add", rclosedopen(6, 7, 0, 6)),
-        ("add", rclosedopen(-1, 8, 3, 4)),
-        ("sub", rclosedopen(1, 8, 2, 3)),
+        ("add", rclosedopen(2, 5, 1, 4)),
+        ("add", rclosedopen(1, 8, 2, 3)),
+        ("add", rclosedopen(6, 8, 1, 3)),
+        ("sub", rclosedopen(4, 7, 2, 4)),
     ]
 
-    filename_base = "simple-example"
-    output_folder = "simple-example-images"
-    os.makedirs(output_folder, exist_ok=True)
+    x_lim = (0, 10)
+    y_lim = (0, 5)
 
-    poly = RPolygon()
-    for i, (operation, r) in enumerate(r_list):
-        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        ax.set_xlim([-2 - 0.5, 10 - 0.5])
-        ax.set_ylim([-2 - 0.5, 10 - 0.5])
-        if operation == "add":
-            poly |= r
-        elif operation == "sub":
-            poly -= r
-        x_lim = (-2, 9)
-        y_lim = (-2, 9)
-        plot_rpolygon(ax, poly, (x_lim, y_lim))
-        ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim)
-        ax.spines['left'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.get_xaxis().set_ticks([])
-        ax.get_yaxis().set_ticks([])
-        # ax.legend(loc="upper right")
-        fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"),
-                    bbox_inches='tight', pad_inches=0)
+    for name, alpha in [("solid", 1.0), ("transparent", 0.35)]:
 
-    with imageio.get_writer(os.path.join(f"{filename_base}.gif"),
-                            mode='I', duration=1) as writer:
-        for i in range(len(r_list)):
-            image = imageio.v2.imread(os.path.join(output_folder, f"{filename_base}-{i}.png"))
-            writer.append_data(image)
+        filename_base = f"simple-example_{name}"
+        output_folder = "simple-example-images"
+        os.makedirs(output_folder, exist_ok=True)
+
+        poly = RPolygon()
+        for i, (operation, r) in enumerate(r_list):
+            fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+            if operation == "add":
+                poly |= r
+            elif operation == "sub":
+                poly -= r
+            plot_rpolygon(ax, poly, (x_lim, y_lim), alpha)
+            ax.set_xlim(x_lim)
+            ax.set_ylim(y_lim)
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            ax.get_xaxis().set_ticks([])
+            ax.get_yaxis().set_ticks([])
+            # ax.legend(loc="upper right")
+            fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"),
+                        bbox_inches='tight', pad_inches=0)
+
+        fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+        plot_rpolygon(ax, poly, (x_lim, y_lim), alpha)
+        fig.savefig(os.path.join(f"{filename_base}.png"),
+                    bbox_inches='tight', pad_inches=0.1)
+
+        with imageio.get_writer(os.path.join(f"{filename_base}.gif"),
+                                mode='I', duration=1.5) as writer:
+            for i in range(len(r_list)):
+                image = imageio.v2.imread(os.path.join(output_folder, f"{filename_base}-{i}.png"))
+                writer.append_data(image)
 
 
 def create_random_polygon(n: int,
@@ -360,15 +363,15 @@ def create_random_polygon(n: int,
 
 def evaluate_random_polygon(save_image=True, show_progress=True):
     n = 100
-    x_max = 512
-    max_x_len = 75
-    y_max = 512
-    max_y_len = 75
+    x_max = 32
+    max_x_len = 8
+    y_max = 32
+    max_y_len = 8
 
     algos = [
         algo_interval_tree,
-        # algo_array_all,
-        # algo_array_greedy_1,
+        algo_array_all,
+        algo_array_greedy_1,
         algo_array_greedy_2
     ]
 
@@ -433,8 +436,8 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
 
         for i, (name, max_rectangles) in enumerate(max_rectangles_dict.items()):
             algo_axes[i].set_title(f"{name}")
-            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "used")
-            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "free")
+            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "polygon", 0.35)
+            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "complement", 0.35)
             algo_axes[i].set_title(f"{name}")
             algo_axes[i].set_xlim(x_lim)
             algo_axes[i].set_ylim(y_lim)
@@ -446,9 +449,9 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
         time_ax.set_ylabel("ms")
         time_ax.set_title("time consumption per step")
         time_ax.set_yscale('log')
-        time_ax.legend(loc="upper left")
+        time_ax.legend(loc="lower right")
 
-        fig.savefig(f"random.png")
+        fig.savefig(f"random.png", bbox_inches='tight', pad_inches=0.1)
 
 
 def benchmark():

@@ -1,5 +1,6 @@
 from .rportion import (
     rempty,
+    rsingleton,
     ropen,
     rclosed,
     ropenclosed,
@@ -9,6 +10,7 @@ from .rportion import (
 
 __all__ = [
     "rempty",
+    "rsingleton",
     "ropen",
     "rclosed",
     "ropenclosed",

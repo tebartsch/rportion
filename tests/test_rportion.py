@@ -1,14 +1,18 @@
 import unittest
+from copy import copy
 from itertools import permutations, combinations
 import random
 
 import numpy as np
 import portion as P
-from portion.interval import open, closedopen, empty, Interval
+from portion.interval import open, closedopen, empty, Interval, singleton, openclosed, closed
 from typing import List, Set, Tuple
 
+from sortedcontainers import SortedList
+
 from rportion import RPolygon
-from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary
+from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary, rsingleton, ropenclosed, \
+    _traverse_diagonally
 
 from tests.helpers import get_maximal_rectangles_from_numpy
 
@@ -33,42 +37,662 @@ def data_tree_to_string(x_boundaries: List[RBoundary],
     return msg
 
 
-def print_mat(mat: List[List[Interval]]):
-    for row in mat:
-        for val in row:
-            print(f"{str(val):<25}", end="")
-        print()
-    print()
-
-
 def print_rpolygon(rpoly: RPolygon, show_trees=False, spacing=20):
+    print("USED")
     if show_trees:
-        print("USED")
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._used_y_ranges, spacing)
         print(msg)
-        for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
-            print(i, "-->", e.x_enclosure_interval, e.y_enclosure_interval)
-        print("FREE")
+    for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
+        print(i, "-->", e)
+    print("FREE")
+    if show_trees:
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._free_y_ranges, spacing)
         print(msg)
-        for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
-            print(i, "-->", e.x_enclosure_interval, e.y_enclosure_interval)
+    for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
+        print(i, "-->", e)
 
 
-class TestRPortion(unittest.TestCase):
+class TestRBoundary(unittest.TestCase):
     def __init__(self, *args, **kwargs):
-        super(TestRPortion, self).__init__(*args, **kwargs)
+        super(TestRBoundary, self).__init__(*args, **kwargs)
 
-    def test_RPolygon_empty(self):
-        poly = rclosed(P.inf, 2, 5, 4)
-        self.assertTrue(poly.empty)
+    def test_init(self):
+        r = RBoundary(0, P.OPEN)
+        self.assertEqual(r.val, 0)
+        self.assertEqual(r.btype, P.OPEN)
+        r = RBoundary(1, P.CLOSED)
+        self.assertEqual(r.val, 1)
+        self.assertEqual(r.btype, P.CLOSED)
+        r = RBoundary(-P.inf, P.CLOSED)
+        self.assertEqual(r.val, -P.inf)
+        self.assertEqual(r.btype, P.OPEN)
+        r = RBoundary(P.inf, P.CLOSED)
+        self.assertEqual(r.val, P.inf)
+        self.assertEqual(r.btype, P.OPEN)
 
-    def test_RPolygon_atomic(self):
+    def test_bool(self):
+        with self.assertRaises(TypeError):
+            r = RBoundary(0, P.OPEN)
+            bool(r)
+
+    def test_invert(self):
+        r = RBoundary(0, P.OPEN)
+        self.assertEqual(~r, RBoundary(0, P.CLOSED))
+        r = RBoundary(1, P.CLOSED)
+        self.assertEqual(~r, RBoundary(1, P.OPEN))
+
+    def test_equal(self):
+        self.assertEqual(RBoundary(0, P.OPEN), RBoundary(0, P.OPEN))
+        self.assertNotEqual(RBoundary(0, P.OPEN), RBoundary(0, P.CLOSED))
+        self.assertNotEqual(RBoundary(0, P.CLOSED), RBoundary(0, P.OPEN))
+        self.assertEqual(RBoundary(0, P.CLOSED), RBoundary(0, P.CLOSED))
+
+        self.assertNotEqual(RBoundary(0, P.OPEN), RBoundary(1, P.OPEN))
+        self.assertNotEqual(RBoundary(0, P.OPEN), RBoundary(1, P.CLOSED))
+        self.assertNotEqual(RBoundary(0, P.CLOSED), RBoundary(1, P.OPEN))
+        self.assertNotEqual(RBoundary(0, P.CLOSED), RBoundary(1, P.CLOSED))
+
+        self.assertNotEqual(RBoundary(1, P.OPEN), RBoundary(0, P.OPEN))
+        self.assertNotEqual(RBoundary(1, P.OPEN), RBoundary(0, P.CLOSED))
+        self.assertNotEqual(RBoundary(1, P.CLOSED), RBoundary(0, P.OPEN))
+        self.assertNotEqual(RBoundary(1, P.CLOSED), RBoundary(0, P.CLOSED))
+
+        self.assertEqual(RBoundary(1, P.OPEN), RBoundary(1, P.OPEN))
+        self.assertNotEqual(RBoundary(1, P.OPEN), RBoundary(1, P.CLOSED))
+        self.assertNotEqual(RBoundary(1, P.CLOSED), RBoundary(1, P.OPEN))
+        self.assertEqual(RBoundary(1, P.CLOSED), RBoundary(1, P.CLOSED))
+
+    def test_le(self):
+
+        self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(0, P.CLOSED))
+        self.assertFalse(RBoundary(0, P.CLOSED) <= RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(0, P.CLOSED) <= RBoundary(0, P.CLOSED))
+
+        self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(1, P.CLOSED))
+        self.assertTrue(RBoundary(0, P.CLOSED) <= RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(0, P.CLOSED) <= RBoundary(1, P.CLOSED))
+
+        self.assertFalse(RBoundary(1, P.OPEN) <= RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(1, P.OPEN) <= RBoundary(0, P.CLOSED))
+        self.assertFalse(RBoundary(1, P.CLOSED) <= RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(1, P.CLOSED) <= RBoundary(0, P.CLOSED))
+
+        self.assertTrue(RBoundary(1, P.OPEN) <= RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(1, P.OPEN) <= RBoundary(1, P.CLOSED))
+        self.assertFalse(RBoundary(1, P.CLOSED) <= RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(1, P.CLOSED) <= RBoundary(1, P.CLOSED))
+
+    def test_lt(self):
+
+        self.assertFalse(RBoundary(0, P.OPEN) < RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(0, P.OPEN) < RBoundary(0, P.CLOSED))
+        self.assertFalse(RBoundary(0, P.CLOSED) < RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(0, P.CLOSED) < RBoundary(0, P.CLOSED))
+
+        self.assertTrue(RBoundary(0, P.OPEN) < RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(0, P.OPEN) < RBoundary(1, P.CLOSED))
+        self.assertTrue(RBoundary(0, P.CLOSED) < RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(0, P.CLOSED) < RBoundary(1, P.CLOSED))
+
+        self.assertFalse(RBoundary(1, P.OPEN) < RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(1, P.OPEN) < RBoundary(0, P.CLOSED))
+        self.assertFalse(RBoundary(1, P.CLOSED) < RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(1, P.CLOSED) < RBoundary(0, P.CLOSED))
+
+        self.assertFalse(RBoundary(1, P.OPEN) < RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(1, P.OPEN) < RBoundary(1, P.CLOSED))
+        self.assertFalse(RBoundary(1, P.CLOSED) < RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(1, P.CLOSED) < RBoundary(1, P.CLOSED))
+
+    def test_ge(self):
+        self.assertTrue(RBoundary(0, P.OPEN) >= RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(0, P.OPEN) >= RBoundary(0, P.CLOSED))
+        self.assertTrue(RBoundary(0, P.CLOSED) >= RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(0, P.CLOSED) >= RBoundary(0, P.CLOSED))
+
+        self.assertFalse(RBoundary(0, P.OPEN) >= RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(0, P.OPEN) >= RBoundary(1, P.CLOSED))
+        self.assertFalse(RBoundary(0, P.CLOSED) >= RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(0, P.CLOSED) >= RBoundary(1, P.CLOSED))
+
+        self.assertTrue(RBoundary(1, P.OPEN) >= RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(1, P.OPEN) >= RBoundary(0, P.CLOSED))
+        self.assertTrue(RBoundary(1, P.CLOSED) >= RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(1, P.CLOSED) >= RBoundary(0, P.CLOSED))
+
+        self.assertTrue(RBoundary(1, P.OPEN) >= RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(1, P.OPEN) >= RBoundary(1, P.CLOSED))
+        self.assertTrue(RBoundary(1, P.CLOSED) >= RBoundary(1, P.OPEN))
+        self.assertTrue(RBoundary(1, P.CLOSED) >= RBoundary(1, P.CLOSED))
+
+    def test_gt(self):
+
+        self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(0, P.CLOSED))
+        self.assertTrue(RBoundary(0, P.CLOSED) > RBoundary(0, P.OPEN))
+        self.assertFalse(RBoundary(0, P.CLOSED) > RBoundary(0, P.CLOSED))
+
+        self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(1, P.CLOSED))
+        self.assertFalse(RBoundary(0, P.CLOSED) > RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(0, P.CLOSED) > RBoundary(1, P.CLOSED))
+
+        self.assertTrue(RBoundary(1, P.OPEN) > RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(1, P.OPEN) > RBoundary(0, P.CLOSED))
+        self.assertTrue(RBoundary(1, P.CLOSED) > RBoundary(0, P.OPEN))
+        self.assertTrue(RBoundary(1, P.CLOSED) > RBoundary(0, P.CLOSED))
+
+        self.assertFalse(RBoundary(1, P.OPEN) > RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(1, P.OPEN) > RBoundary(1, P.CLOSED))
+        self.assertTrue(RBoundary(1, P.CLOSED) > RBoundary(1, P.OPEN))
+        self.assertFalse(RBoundary(1, P.CLOSED) > RBoundary(1, P.CLOSED))
+
+    def test_copy(self):
+        r = RBoundary(0, P.OPEN)
+        print(copy(r))
+        self.assertEqual(r, copy(r))
+        self.assertNotEqual(id(r), id(copy(r)))
+
+
+class TestRPolygonConstructors(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestRPolygonConstructors, self).__init__(*args, **kwargs)
+
+    def test_rsingleton(self):
+        x = 0
+        y = 3
+        p = rsingleton(x, y)
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x, P.OPEN),
+            RBoundary(x, P.CLOSED),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), singleton(y)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [open(-P.inf, y) | open(y, P.inf), open(-P.inf, y) | open(y, P.inf), open(-P.inf, P.inf)],
+            [open(-P.inf, y) | open(y, P.inf), open(-P.inf, y) | open(y, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+    def test_rempty(self):
+        p = rempty()
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [[empty()]])
+        self.assertListEqual(p._free_y_ranges, [[open(-P.inf, P.inf)]])
+
+    def test_ropen(self):
+        x1, x2 = 0, 3
+        y1, y2 = 1, 2
+        p = ropen(x1, x2, y1, y2)
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.CLOSED),
+            RBoundary(x2, P.OPEN),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), open(y1, y2)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [openclosed(-P.inf, y1) | closedopen(y2, P.inf),
+             openclosed(-P.inf, y1) | closedopen(y2, P.inf),
+             open(-P.inf, P.inf)],
+            [openclosed(-P.inf, y1) | closedopen(y2, P.inf), openclosed(-P.inf, y1) | closedopen(y2, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+    def test_rclosed(self):
+        x1, x2 = 0, 3
+        y1, y2 = 1, 2
+        p = rclosed(x1, x2, y1, y2)
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.OPEN),
+            RBoundary(x2, P.CLOSED),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), closed(y1, y2)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [open(-P.inf, y1) | open(y2, P.inf), open(-P.inf, y1) | open(y2, P.inf), open(-P.inf, P.inf)],
+            [open(-P.inf, y1) | open(y2, P.inf), open(-P.inf, y1) | open(y2, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+    def test_ropenclosed(self):
+        x1, x2 = 0, 3
+        y1, y2 = 1, 2
+        p = ropenclosed(x1, x2, y1, y2)
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.CLOSED),
+            RBoundary(x2, P.CLOSED),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), openclosed(y1, y2)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [openclosed(-P.inf, y1) | open(y2, P.inf), openclosed(-P.inf, y1) | open(y2, P.inf), open(-P.inf, P.inf)],
+            [openclosed(-P.inf, y1) | open(y2, P.inf), openclosed(-P.inf, y1) | open(y2, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+    def test_rclosedopen(self):
+        x1, x2 = 0, 3
+        y1, y2 = 1, 2
+        p = rclosedopen(x1, x2, y1, y2)
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.OPEN),
+            RBoundary(x2, P.OPEN),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), closedopen(y1, y2)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [open(-P.inf, y1) | closedopen(y2, P.inf), open(-P.inf, y1) | closedopen(y2, P.inf), open(-P.inf, P.inf)],
+            [open(-P.inf, y1) | closedopen(y2, P.inf), open(-P.inf, y1) | closedopen(y2, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+
+class TestRPolygonProperties(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestRPolygonProperties, self).__init__(*args, **kwargs)
+
+    def test_empty(self):
+        p1 = rclosed(0, 3, 0, 3)
+        p2 = ropen(1, 2, 1, 2)
+        self.assertTrue(rempty().empty)
+        self.assertFalse(p1.empty)
+        self.assertFalse(p2.empty)
+        self.assertTrue((p2 - p1).empty)
+        self.assertFalse((p1 - p2).empty)
+
+    def test_atomic(self):
+        p1 = rclosed(0, 3, 0, 3)
+        p2 = ropen(1, 2, 1, 2)
         self.assertTrue(rempty().atomic)
-        self.assertTrue(rclosed(2, 4, 3, 5).atomic)
-        self.assertFalse((rclosed(2, 4, 3, 5) | rclosed(1, 5, 4, 6)).atomic)
+        self.assertTrue(p1.atomic)
+        self.assertTrue(p2.atomic)
+        self.assertFalse((p1 - p2).atomic)
 
-    def test_RPolygon_maximal_atomic_x_rectangles(self):
+    def test_enclosure(self):
+        x1, x2, x3, x4 = 0, 1, 2, 3
+        y1, y2, y3 = 0, 1, 2
+        self.assertEqual(
+            (rclosed(x1, x3, y1, y3) | rclosed(x2, x4, y1, y2)).enclosure,
+            rclosed(x1, x4, y1, y3)
+        )
+
+    def test_x_enclosure_interval(self):
+        x1, x2, x3, x4 = 0, 1, 2, 3
+        y1, y2, y3 = 0, 1, 2
+        self.assertEqual(
+            (rclosed(x1, x3, y1, y3) | rclosed(x2, x4, y1, y2)).x_enclosure_interval,
+            closed(x1, x4)
+        )
+        self.assertEqual(
+            (ropen(-P.inf, x1, y1, y2) | ropen(x2, P.inf, y1, y2)).x_enclosure_interval,
+            open(-P.inf, P.inf)
+        )
+
+    def test_y_enclosure_interval(self):
+        x1, x2, x3, x4 = 0, 1, 2, 3
+        y1, y2, y3 = 0, 1, 2
+        self.assertEqual(
+            (rclosed(x1, x3, y1, y3) | rclosed(x2, x4, y1, y2)).y_enclosure_interval,
+            closed(y1, y3)
+        )
+
+    def test_boundaries(self):
+        x1, x2 = 0, 2
+        y1, y2 = 0, 3
+        p = rclosedopen(x1, x2, y1, y2)
+        self.assertEqual(p.x_lower, x1)
+        self.assertEqual(p.x_upper, x2)
+        self.assertEqual(p.y_lower, y1)
+        self.assertEqual(p.y_upper, y2)
+        self.assertEqual(p.x_left, P.CLOSED)
+        self.assertEqual(p.x_right, P.OPEN)
+        self.assertEqual(p.y_left, P.CLOSED)
+        self.assertEqual(p.y_right, P.OPEN)
+
+
+class TestRPolygonClassMethods(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestRPolygonClassMethods, self).__init__(*args, **kwargs)
+
+    def test_from_interval_product(self):
+        x1, x2 = 0, 1
+        y1, y2, y3, y4 = 0, 2, 3, 4
+        p = RPolygon.from_interval_product(open(x1, x2), openclosed(y1, y2))
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.CLOSED),
+            RBoundary(x2, P.OPEN),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), openclosed(y1, y2)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [openclosed(-P.inf, y1) | open(y2, P.inf), openclosed(-P.inf, y1) | open(y2, P.inf), open(-P.inf, P.inf)],
+            [openclosed(-P.inf, y1) | open(y2, P.inf), openclosed(-P.inf, y1) | open(y2, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+        p = RPolygon.from_interval_product(open(x1, x2), openclosed(y1, y2) | closedopen(y3, y4))
+        self.assertListEqual(list(p._x_boundaries), [
+            RBoundary(-P.inf, P.OPEN),
+            RBoundary(x1, P.CLOSED),
+            RBoundary(x2, P.OPEN),
+            RBoundary(P.inf, P.OPEN),
+        ])
+        self.assertListEqual(p._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), openclosed(y1, y2) | closedopen(y3, y4)],
+            [empty()],
+        ])
+        self.assertListEqual(p._free_y_ranges, [
+            [openclosed(-P.inf, y1) | open(y2, y3) | closedopen(y4, P.inf),
+             openclosed(-P.inf, y1) | open(y2, y3) | closedopen(y4, P.inf),
+             open(-P.inf, P.inf)],
+            [openclosed(-P.inf, y1) | open(y2, y3) | closedopen(y4, P.inf),
+             openclosed(-P.inf, y1) | open(y2, y3) | closedopen(y4, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+
+class TestRPolygonOperations(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestRPolygonOperations, self).__init__(*args, **kwargs)
+
+    def test_repr(self):
+        self.assertEqual(repr(rempty()), "(x=(), y=())")
+        self.assertEqual(repr(ropen(0, 2, 0, 1)), "(x=(0,2), y=(0,1))")
+        self.assertEqual(repr(rclosed(0, 2, 0, 1)), "(x=[0,2], y=[0,1])")
+        self.assertEqual(repr(ropenclosed(0, 2, 0, 1)), "(x=(0,2], y=(0,1])")
+        self.assertEqual(repr(rclosedopen(0, 2, 0, 1)), "(x=[0,2), y=[0,1))")
+        self.assertEqual(repr(rclosed(0, 2, 0, 2) | rclosed(1, 3, 0, 1)),
+                         "(x=[0,3], y=[0,1]) | (x=[0,2], y=[0,2])")
+
+    def test_eq(self):
+        self.assertTrue(rempty() == rempty())
+        self.assertFalse(rempty() == ropen(0, 1, 0, 1))
+        self.assertFalse(ropen(0, 1, 0, 1) == ropen(0, 1, 0, 2))
+        self.assertFalse(ropen(0, 1, 0, 1) == ropen(0, 2, 0, 1))
+
+    def test__add_atomic(self):
+        # empty x_interval
+        poly = rempty()
+        x_atom = closedopen(1, 0)
+        y_interval = open(1, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[empty()]])
+        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
+
+        # empty y_interval
+        poly = rempty()
+        x_atom = closedopen(-P.inf, 1)
+        y_interval = empty()
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[empty()]])
+        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
+
+        # add the whole area
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[empty()]])
+
+        # add half planes
+        # # (a) Right half space
+        poly = rempty()
+        x_atom = closedopen(0, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        # # (b) Left half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, 0)
+        y_interval = open(-P.inf, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        # # (c) Upper half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, 0)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
+        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
+        # # (d) Lower half space
+        poly = rempty()
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = closedopen(0, P.inf)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
+
+        # add a single bounded polygon
+        poly = rempty()
+        x_atom = closedopen(1, 3)
+        y_interval = closedopen(2, 4)
+        poly._add_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), closedopen(2, 4)],
+            [empty()]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, P.inf)],
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf)],
+            [open(-P.inf, P.inf)]
+        ])
+
+    def test__sub_atomic(self):
+        # Remove rectangle with empty x_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(1, 0)
+        y_interval = open(1, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[empty()]])
+
+        # Remove rectangle with empty y_interval from the whole plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, 1)
+        y_interval = empty()
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[empty()]])
+
+        # Remove half planes from the whole plane
+        # # (a) Right half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(0, P.inf)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        # # (b) Left half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, 0)
+        y_interval = open(-P.inf, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), empty()],
+            [open(-P.inf, P.inf)]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), open(-P.inf, P.inf)],
+            [empty()]
+        ])
+        # # (c) Upper half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = open(-P.inf, 0)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
+        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
+        # # (d) Lower half space
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(-P.inf, P.inf)
+        y_interval = closedopen(0, P.inf)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
+        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
+
+        # remove a single bounded rectangle from the plane
+        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
+        x_atom = closedopen(1, 3)
+        y_interval = closedopen(2, 4)
+        poly._sub_atomic(x_atom, y_interval)
+        self.assertListEqual(poly._used_y_ranges, [
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, P.inf)],
+            [open(-P.inf, 2) | closedopen(4, P.inf),
+             open(-P.inf, 2) | closedopen(4, P.inf)],
+            [open(-P.inf, P.inf)]
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [empty(), empty(), empty()],
+            [empty(), closedopen(2, 4)],
+            [empty()]
+        ])
+
+        # Another example
+        poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
+        poly._sub_atomic(open(-P.inf, P.inf), open(-P.inf, 0))
+        poly._sub_atomic(open(-P.inf, P.inf), open(1, P.inf))
+        self.assertListEqual(poly._used_y_ranges, [
+            [empty(), closed(0, 1)],
+            [empty()],
+        ])
+        self.assertListEqual(poly._free_y_ranges, [
+            [open(-P.inf, 0) | open(1, P.inf), open(-P.inf, 0) | open(1, P.inf)],
+            [open(-P.inf, P.inf)],
+        ])
+
+    def test_intersection(self):
+        p1 = rclosed(0, 2, 0, 2)
+        p2 = rclosed(1, 3, 1, 3)
+        p3 = rclosed(3, 4, 3, 4)
+        self.assertEqual(
+            p1.intersection(p2),
+            p1 & p2
+        )
+        self.assertEqual(
+            p1 & p2,
+            rclosed(1, 2, 1, 2)
+        )
+        self.assertEqual(
+            p1.intersection(p3),
+            p1 & p3
+        )
+        self.assertEqual(
+            p1.intersection(p3),
+            rempty()
+        )
+
+    def test_union(self):
+        p1 = rclosed(0, 2, 0, 2)
+        p2 = rclosed(1, 3, 1, 3)
+        self.assertEqual(
+            p1.union(rempty()),
+            p1 | rempty()
+        )
+        self.assertEqual(
+            p1 | rempty(),
+            p1
+        )
+        self.assertEqual(
+            p1.union(p2),
+            p1 | p2
+        )
+        self.assertListEqual(
+            list((p1 | p2).maximal_used_rectangles()),
+            [rclosed(0, 3, 1, 2), rclosed(0, 2, 0, 2), rclosed(1, 3, 1, 3), rclosed(1, 2, 0, 3)]
+        )
+
+    def test_complement(self):
+        p = rclosed(0, 2, 0, 2)
+        self.assertEqual(
+            p.complement(),
+            ~p
+        )
+        self.assertListEqual(
+            list(p.maximal_used_rectangles()),
+            list((~p).maximal_free_rectangles())
+        )
+        self.assertListEqual(
+            list(p.maximal_free_rectangles()),
+            list((~p).maximal_used_rectangles())
+        )
+        self.assertEqual(p, ~(~p))
+
+    def test_difference(self):
+        p1 = rclosed(0, 2, 0, 2)
+        p2 = rclosed(1, 3, 1, 3)
+        self.assertEqual(
+            p1.difference(p2),
+            p1 - p2
+        )
+        self.assertListEqual(
+            list((p1 - p2).maximal_used_rectangles()),
+            [RPolygon.from_interval_product(closed(0, 2), closedopen(0, 1)),
+             RPolygon.from_interval_product(closedopen(0, 1), closed(0, 2))]
+        )
+
+    def test_maximal_atomic_x_rectangles(self):
         # Add two finite (in x dimension) polygons.
         #        (1)          (2)         (3)         (4)           (5)
         #          +--+       +---+       +--+       +---+       +--+
@@ -190,7 +814,6 @@ class TestRPortion(unittest.TestCase):
         # poly._add_atomic(closedopen(x1, x2), y_interval)
         poly._add_atomic(closedopen(x3, x4), y_interval)
         poly._add_atomic(closedopen(x4, x5), y_interval)
-        print_rpolygon(poly, show_trees=True)
 
         # Add three sectors in each six possible different orders and test if the result underlying
         # data structure of RPolygon is the same for all.
@@ -213,183 +836,7 @@ class TestRPortion(unittest.TestCase):
             self.assertListEqual(poly_1._used_y_ranges, poly_2._used_y_ranges)
             self.assertListEqual(poly_1._free_y_ranges, poly_2._free_y_ranges)
 
-    def test_RPolygon___sub__(self):
-        poly = rclosedopen(-P.inf, 0, -P.inf, P.inf)
-        poly._sub_interval_product(open(-P.inf, P.inf), open(-P.inf, 0) | open(1, P.inf))
-        # poly._sub_atomic(closedopen(-P.inf, 0), open(-P.inf, P.inf))
-        print_rpolygon(poly, show_trees=True)
-        print("----")
-        print_rpolygon(ropen(-P.inf, 0, -P.inf, P.inf) & rclosed(0, 3, 0, 3), show_trees=True)
-
-    def test_RPolygon__add_atomic(self):
-        # empty x_interval
-        poly = rempty()
-        x_atom = closedopen(1, 0)
-        y_interval = open(1, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[empty()]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
-
-        # empty y_interval
-        poly = rempty()
-        x_atom = closedopen(-P.inf, 1)
-        y_interval = empty()
-        poly._add_atomic(x_atom, y_interval)
-        print_rpolygon(poly, show_trees=True, spacing=15)
-        self.assertListEqual(poly._used_y_ranges, [[empty()]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, P.inf)]])
-
-        # add the whole area
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # add half planes
-        # # (a) Right half space
-        poly = rempty()
-        x_atom = closedopen(0, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        # # (b) Left half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, 0)
-        y_interval = open(-P.inf, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        # # (c) Upper half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, 0)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
-        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
-        # # (d) Lower half space
-        poly = rempty()
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = closedopen(0, P.inf)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
-
-        # add a single bounded polygon
-        poly = rempty()
-        x_atom = closedopen(1, 3)
-        y_interval = closedopen(2, 4)
-        poly._add_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty(), empty()],
-            [empty(), closedopen(2, 4)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, P.inf)],
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf)],
-            [open(-P.inf, P.inf)]
-        ])
-
-    def test_RPolygon__sub_atomic(self):
-        # Removing an arbitrary rectangle from an empty polygon is effect less
-        # TODO
-
-        # Remove rectangle with empty x_interval from the whole plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(1, 0)
-        y_interval = open(1, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # Remove rectangle with empty y_interval from the whole plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, 1)
-        y_interval = empty()
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[empty()]])
-
-        # Remove half planes from the whole plane
-        # # (a) Right half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(0, P.inf)
-        y_interval = open(-P.inf, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        # # (b) Left half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, 0)
-        y_interval = open(-P.inf, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [empty(), empty()],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), open(-P.inf, P.inf)],
-            [empty()]
-        ])
-        # # (c) Upper half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = open(-P.inf, 0)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[closedopen(0, P.inf)]])
-        self.assertListEqual(poly._free_y_ranges, [[open(-P.inf, 0)]])
-        # # (d) Lower half space
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(-P.inf, P.inf)
-        y_interval = closedopen(0, P.inf)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [[open(-P.inf, 0)]])
-        self.assertListEqual(poly._free_y_ranges, [[closedopen(0, P.inf)]])
-
-        # remove a single bounded rectangle from the plane
-        poly = ropen(-P.inf, P.inf, -P.inf, P.inf)
-        x_atom = closedopen(1, 3)
-        y_interval = closedopen(2, 4)
-        poly._sub_atomic(x_atom, y_interval)
-        self.assertListEqual(poly._used_y_ranges, [
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, P.inf)],
-            [open(-P.inf, 2) | closedopen(4, P.inf),
-             open(-P.inf, 2) | closedopen(4, P.inf)],
-            [open(-P.inf, P.inf)]
-        ])
-        self.assertListEqual(poly._free_y_ranges, [
-            [empty(), empty(), empty()],
-            [empty(), closedopen(2, 4)],
-            [empty()]
-        ])
-
-    def test_maximal_rectangles_extra(self):
+    def test_maximal_rectangles_validation(self):
         n = 15  # Number of rectangles
 
         # repeat test which generates random polygons multiply times.
@@ -490,3 +937,28 @@ class TestRPortion(unittest.TestCase):
 
             print("Tested maximal rectangle calculation for the following poylgon.")
             print(matrix_to_str(arr))
+
+
+class TestIntervalTreeFunctions(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestIntervalTreeFunctions, self).__init__(*args, **kwargs)
+
+    def test__traverse_diagonally(self):
+        boundaries = [RBoundary(-P.inf, P.OPEN), RBoundary(P.inf, P.OPEN)]
+        interval_tree = [[empty()]]
+        with self.assertRaises(StopIteration):
+            next(_traverse_diagonally(boundaries, interval_tree))
+
+        print_rpolygon(ropen(0, 1, 0, 1), True)
+        boundaries = [RBoundary(-P.inf, P.OPEN), RBoundary(0, P.CLOSED),
+                      RBoundary(1, P.OPEN), RBoundary(P.inf, P.OPEN)]
+        interval_tree = [
+            [empty(), empty(), empty()],
+            [empty(), open(0, 1)],
+            [empty()]
+        ]
+        iterator = _traverse_diagonally(boundaries, interval_tree)
+        self.assertEqual(next(iterator), (open(0, 1), open(0, 1)))
+        with self.assertRaises(StopIteration):
+            next(iterator)
+

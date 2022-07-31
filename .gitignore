@@ -1,6 +1,6 @@
-test/pytest_cache
+.pytest_cache
 venv
 dist
 
 *idea
-/docu/images/
+/docu/simple-example-images/
