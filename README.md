@@ -32,6 +32,7 @@ Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Int
       * [Polygon bounds & attributes](#polygon-bounds--attributes)
       * [Polygon operations](#polygon-operations)
       * [Maximum rectangle iterators](#maximum-rectangle-iterators)
+      * [Internal data structure](#internal-data-structure)
   * [Changelog](#changelog)
   * [Contributions](#contributions)
   * [License](#license)
@@ -162,8 +163,9 @@ An `RPolygon` defines the following properties
 [&uparrow; back to top](#table-of-contents)
 ### Maximum rectangle iterators
 
-The method `maximal_used_rectangles` of a `RPolygon` returns an iterator over all maximal rectangles contained
-in the rectilinear polygon.
+The method `maximal_used_rectangles` of a `RPolygon` instance returns an iterator over all maximal rectangles contained
+in the rectilinear polygon. Similarly, the method `maximal_free_rectangles` of a `RPolygon` instance return an
+iterator over all maximal rectangles outside the rectilinear polygon.
 
 A maximal rectangle is rectangle in the polygon which is not a real subset of any other rectangle contained in
 the rectilinear polygon.
@@ -174,6 +176,8 @@ I.e. for the polygon
 >>> poly = poly - rp.rclosedopen(4, 7, 2, 4)
 >>> list(poly.maximal_used_rectangles())
 [(x=[1,4), y=[2,3)), (x=[2,5), y=[1,2)), (x=[6,8), y=[1,2)), (x=[2,4), y=[1,4)), (x=[7,8), y=[1,3))]
+>>> list(poly.maximal_free_rectangles())
+[(x=(-inf,+inf), y=(-inf,1)), (x=(-inf,+inf), y=[4,+inf)), ...]
 ```
 which can be visualized as follows:
 <p align="center">
@@ -183,6 +187,96 @@ which can be visualized as follows:
 **Left:** Simple Rectilinear polygon. The red areas are part of the polygon.<br>
 **Right:** Maximal contained rectangles are drawn above each other transparently. The maximum
               rectangles lying outside the polygon are represented analogously in green.
+
+[&uparrow; back to top](#table-of-contents)
+## Internal data structure
+
+The polygon is internally stored using an [interval tree](https://en.wikipedia.org/wiki/Interval_tree). Every
+node of the tree corresponds to an interval in x-dimension which is representable by boundaries (in x-dimension) 
+present in the polygon. Each node contains an 1D-interval (by using the library
+[`portion`](https://github.com/AlexandreDecan/portion)) in y-dimension. Combining those 1D-intervals
+yields a rectangle contained in the polygon.
+
+I.e. for the rectangle `(x=[0, 2), y=[1, 3))` this can be visualized as follows.
+```
+  interval tree with      x-interval corresponding       y-interval stored in
+ a lattice-like shape             to each node                each node
+       ┌─x─┐                      ┌─(-∞,+∞)─┐                  ┌─()──┐
+       │   │                      │         │                  │     │
+     ┌─x─┬─x─┐               ┌─(-∞,2)──┬──[0,+∞)─┐          ┌─()──┬──()─┐
+     │   │   │               │         │         │          │     │     │
+     x   x   x            (-∞,0]     [0,2)     [2,+∞)      ()   [1,3)   ()
+```
+The class `RPolygon` holds three data values to store its data.
+  - `_x_boundaries`: Sorted list of necessary boundaries in x-dimension with type (`OPEN` or `CLOSED`)
+  - `_used_y_ranges`: List of lists in a triangular shape representing the interval tree for the
+                      space occupied by the rectilinear polygon.
+  - `_free_y_ranges`: List of list in a triangular shape representing the interval tree of
+                      for the space not occupied by the rectilinear polygon.
+
+I.e.
+```python
+>>> poly = rp.rclosedopen(0, 2, 1, 3)
+>>> poly._x_boundaries
+SortedList([(-inf, OPEN), (0, OPEN), (2, OPEN), (+inf, OPEN)])
+>>> poly._used_y_ranges
+[[(), (), ()], 
+ [(), [1,3)], 
+ [()]]
+>>> poly._free_y_ranges
+[[(-inf,1) | [3,+inf), (-inf,1) | [3,+inf), (-inf,+inf)], 
+ [(-inf,1) | [3,+inf), (-inf,1) | [3,+inf)], 
+ [(-inf,+inf)]]
+```
+
+You can use the function `data_tree_to_string` as noted below to print the internal data structure:
+
+```python
+>>> poly = rp.rclosedopen(0, 2, 1, 3)
+>>> print(data_tree_to_string(poly._x_boundaries, poly._used_y_ranges, 6))
+                |  +inf     2     0
+----------------+------------------
+     -inf (OPEN)|    ()    ()    ()
+      0 (CLOSED)|    () [1,3)
+      2 (CLOSED)|    ()
+```
+
+```python
+>>> poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
+>>> poly = poly - rp.rclosedopen(4, 7, 2, 4)
+>>> print(data_tree_to_string(poly._x_boundaries, poly._used_y_ranges, 6))
+                |  +inf     8     7     6     5     4     2     1
+----------------+------------------------------------------------
+     -inf (OPEN)|    ()    ()    ()    ()    ()    ()    ()    ()
+      1 (CLOSED)|    ()    ()    ()    ()    () [2,3) [2,3)
+      2 (CLOSED)|    ()    ()    ()    () [1,2) [1,4)
+      4 (CLOSED)|    ()    ()    ()    () [1,2)
+      5 (CLOSED)|    ()    ()    ()    ()
+      6 (CLOSED)|    () [1,2) [1,2)
+      7 (CLOSED)|    () [1,3)
+```
+
+```python
+def data_tree_to_string(x_boundaries,
+                        y_intervals,
+                        spacing: int):
+    col_space = 10
+    n = len(y_intervals)
+    msg = " " * (spacing + col_space) + "|"
+    for x_b in x_boundaries[-1:0:-1]:
+        msg += f"{str(x_b.val):>{spacing}}"
+    msg += "\n" + f"-" * (spacing+col_space) + "+"
+    for i in range(n):
+        msg += f"-" * spacing
+    msg += "\n"
+    for i, row in enumerate(y_intervals):
+        x_b = x_boundaries[i]
+        msg += f"{str((~x_b).val) + ' (' + str((~x_b).btype) + ')':>{spacing+ col_space}}|"
+        for val in row:
+            msg += f"{str(val):>{spacing}}"
+        msg += "\n"
+    return msg
+```
 
 [&uparrow; back to top](#table-of-contents)
 ## Changelog

@@ -949,7 +949,6 @@ class TestIntervalTreeFunctions(unittest.TestCase):
         with self.assertRaises(StopIteration):
             next(_traverse_diagonally(boundaries, interval_tree))
 
-        print_rpolygon(ropen(0, 1, 0, 1), True)
         boundaries = [RBoundary(-P.inf, P.OPEN), RBoundary(0, P.CLOSED),
                       RBoundary(1, P.OPEN), RBoundary(P.inf, P.OPEN)]
         interval_tree = [
