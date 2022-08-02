@@ -7,9 +7,6 @@ import numpy as np
 import portion as P
 from portion.interval import open, closedopen, empty, Interval, singleton, openclosed, closed
 from typing import List, Set, Tuple
-
-from sortedcontainers import SortedList
-
 from rportion import RPolygon
 from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary, rsingleton, ropenclosed, \
     _traverse_diagonally
@@ -42,13 +39,13 @@ def print_rpolygon(rpoly: RPolygon, show_trees=False, spacing=20):
     if show_trees:
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._used_y_ranges, spacing)
         print(msg)
-    for i, e in enumerate(rpoly.maximal_used_rectangles(), start=1):
+    for i, e in enumerate(rpoly.maximal_rectangles(), start=1):
         print(i, "-->", e)
     print("FREE")
     if show_trees:
         msg = data_tree_to_string(list(rpoly._x_boundaries), rpoly._free_y_ranges, spacing)
         print(msg)
-    for i, e in enumerate(rpoly.maximal_free_rectangles(), start=1):
+    for i, e in enumerate((~rpoly).maximal_rectangles(), start=1):
         print(i, "-->", e)
 
 
@@ -659,7 +656,7 @@ class TestRPolygonOperations(unittest.TestCase):
             p1 | p2
         )
         self.assertListEqual(
-            list((p1 | p2).maximal_used_rectangles()),
+            list((p1 | p2).maximal_rectangles()),
             [rclosed(0, 3, 1, 2), rclosed(0, 2, 0, 2), rclosed(1, 3, 1, 3), rclosed(1, 2, 0, 3)]
         )
 
@@ -670,12 +667,12 @@ class TestRPolygonOperations(unittest.TestCase):
             ~p
         )
         self.assertListEqual(
-            list(p.maximal_used_rectangles()),
-            list((~p).maximal_free_rectangles())
+            list(p._used_y_ranges),
+            list((~p)._free_y_ranges)
         )
         self.assertListEqual(
-            list(p.maximal_free_rectangles()),
-            list((~p).maximal_used_rectangles())
+            list(p._free_y_ranges),
+            list((~p)._used_y_ranges)
         )
         self.assertEqual(p, ~(~p))
 
@@ -687,7 +684,7 @@ class TestRPolygonOperations(unittest.TestCase):
             p1 - p2
         )
         self.assertListEqual(
-            list((p1 - p2).maximal_used_rectangles()),
+            list((p1 - p2).maximal_rectangles()),
             [RPolygon.from_interval_product(closed(0, 2), closedopen(0, 1)),
              RPolygon.from_interval_product(closedopen(0, 1), closed(0, 2))]
         )
@@ -868,12 +865,12 @@ class TestRPolygonOperations(unittest.TestCase):
             poly_used_rectangles = set([
                 (r.x_enclosure_interval.lower, r.x_enclosure_interval.upper,
                  r.y_enclosure_interval.lower, r.y_enclosure_interval.upper)
-                for r in poly.maximal_used_rectangles()
+                for r in poly.maximal_rectangles()
             ])
             poly_free_rectangles = set([
                 (r.x_enclosure_interval.lower, r.x_enclosure_interval.upper,
                  r.y_enclosure_interval.lower, r.y_enclosure_interval.upper)
-                for r in (poly | (~ropen(0, x_max, 0, y_max))).maximal_free_rectangles()])
+                for r in (~(poly | (~ropen(0, x_max, 0, y_max)))).maximal_rectangles()])
 
             def matrix_to_str(usage_arr: np.array):
                 msg = ""
@@ -935,7 +932,7 @@ class TestRPolygonOperations(unittest.TestCase):
                 msg += difference_string(arr, diff_free_2)
                 self.fail(msg)
 
-            print("Tested maximal rectangle calculation for the following poylgon.")
+            print("Tested maximal rectangle calculation for the following polygon.")
             print(matrix_to_str(arr))
 
 

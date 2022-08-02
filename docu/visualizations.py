@@ -227,10 +227,10 @@ def plot_rpolygon(ax: Axes, poly: RPolygon,
     ax.set_ylim(*box[1])
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
     used_coords = [bounding_coords(rec & enclosing_rec)
-                   for rec in poly.maximal_used_rectangles()]
+                   for rec in poly.maximal_rectangles()]
     plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", alpha=alpha)
     free_coords = [bounding_coords(rec & enclosing_rec)
-                   for rec in poly.maximal_free_rectangles()]
+                   for rec in (~poly).maximal_rectangles()]
     plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", alpha=alpha)
 
 
@@ -349,10 +349,10 @@ def create_random_polygon(n: int,
         if algo == algo_interval_tree:
             max_rectangles[algo] = (
                 [bounding_coords(rec & enclosing_rec)
-                 for rec in polygons[algo].maximal_used_rectangles()
+                 for rec in polygons[algo].maximal_rectangles()
                  if bounding_coords(rec & enclosing_rec) is not None],
                 [bounding_coords(rec & enclosing_rec)
-                 for rec in polygons[algo].maximal_free_rectangles()
+                 for rec in (~polygons[algo]).maximal_rectangles()
                  if bounding_coords(rec & enclosing_rec) is not None]
             )
         else:

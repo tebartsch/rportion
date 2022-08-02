@@ -428,7 +428,7 @@ class RPolygon:
     @property
     def empty(self):
         try:
-            next(self.maximal_used_rectangles())
+            next(self.maximal_rectangles())
             return False
         except StopIteration:
             return True
@@ -436,7 +436,7 @@ class RPolygon:
     @property
     def atomic(self):
         try:
-            max_rec_iter = self.maximal_used_rectangles()
+            max_rec_iter = self.maximal_rectangles()
             next(max_rec_iter)
             next(max_rec_iter)
             return False
@@ -524,29 +524,16 @@ class RPolygon:
         """
         return self - other
 
-    def maximal_used_rectangles(self) -> Iterator['RPolygon']:
+    def maximal_rectangles(self) -> Iterator['RPolygon']:
         """
-        Yield all maximal rectangle which are contained in this polygon.
+        Yield all maximal rectangle uniquely which are contained in this polygon.
 
         A rectangle is called maximal if it is not contained in any larger rectangle of this polygon.
 
-        :return: Iterator[RPolygon]:
+        :return: Iterator[RPolygon]: iterator over maximal rectangles inside polygon
         """
         # We expect the intervals returned by `self._maximal_used_atomic_x_rectangles()` to be atomic.
         for x_atom, y_interval in self._maximal_used_atomic_x_rectangles():
-            for y_atom in y_interval:
-                yield self.__class__.from_interval_product(x_atom, y_atom)
-
-    def maximal_free_rectangles(self) -> Iterator['RPolygon']:
-        """
-        Yield all maximal rectangle which do not intersect the polygon uniquely.
-
-        A rectangle is called maximal if it is not contained in any larger rectangle not intersecting this polygon.
-
-        :return: Iterator['RPolygon']:
-        """
-        # We expect the intervals returned by `self._maximal_used_atomic_x_rectangles()` to be atomic.
-        for x_atom, y_interval in self._maximal_free_atomic_x_rectangles():
             for y_atom in y_interval:
                 yield self.__class__.from_interval_product(x_atom, y_atom)
 
@@ -603,7 +590,7 @@ class RPolygon:
             return "(x=(), y=())"
 
         string = []
-        for atomic_poly in self.maximal_used_rectangles():
+        for atomic_poly in self.maximal_rectangles():
             x_int = atomic_poly.x_enclosure_interval
             y_int = atomic_poly.y_enclosure_interval
             string.append(f"(x={repr(x_int)}, y={repr(y_int)})")

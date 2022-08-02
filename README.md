@@ -8,14 +8,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Commits](https://img.shields.io/github/last-commit/tilmann-bartsch/rportion/master)](https://github.com/tilmann-bartsch/rportion/commits/master)
 
-The `rportion` library provides data structure to represent rectilinear 2D polygons (unions of 2D-intervals) in Python 3.7+.
+The `rportion` library provides data structure to represent 
+2D [rectilinear polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon) (unions of 2D-intervals) in Python 3.7+.
 It is built upon the library [`portion`](https://github.com/AlexandreDecan/portion) and follows its concepts.
+The following features are provided:
 
  - 2D-Intervals (rectangles) which can be open/closed and finite/infinite at every boundary
- - support for intersection, union, complement and difference
- - obtain all maximum rectangles inside and outside the given polygon
+ - intersection, union, complement and difference of rectilinear polygons
+ - iterator over all maximum rectangles inside and outside a given polygon
 
-In the case of integers/floats it can be used keep track of the area resulting 
+In the case of integers/floats it can be used to keep track of the area resulting 
 from the union/difference of rectangles:
 
 <p align="center">
@@ -163,21 +165,19 @@ An `RPolygon` defines the following properties
 [&uparrow; back to top](#table-of-contents)
 ### Maximum rectangle iterators
 
-The method `maximal_used_rectangles` of a `RPolygon` instance returns an iterator over all maximal rectangles contained
-in the rectilinear polygon. Similarly, the method `maximal_free_rectangles` of a `RPolygon` instance return an
-iterator over all maximal rectangles outside the rectilinear polygon.
+The method `maximal_rectangles` of a `RPolygon` instance returns an iterator over all maximal rectangles contained
+in the rectilinear polygon.
 
 A maximal rectangle is rectangle in the polygon which is not a real subset of any other rectangle contained in
 the rectilinear polygon.
 
 I.e. for the polygon
+
 ```python
->>> poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
->>> poly = poly - rp.rclosedopen(4, 7, 2, 4)
->>> list(poly.maximal_used_rectangles())
-[(x=[1,4), y=[2,3)), (x=[2,5), y=[1,2)), (x=[6,8), y=[1,2)), (x=[2,4), y=[1,4)), (x=[7,8), y=[1,3))]
->>> list(poly.maximal_free_rectangles())
-[(x=(-inf,+inf), y=(-inf,1)), (x=(-inf,+inf), y=[4,+inf)), ...]
+>> > poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
+>> > poly = poly - rp.rclosedopen(4, 7, 2, 4)
+>> > list(poly.maximal_rectangles())
+[(x=[1, 4), y = [2, 3)), (x=[2, 5), y = [1, 2)), (x=[6, 8), y = [1, 2)), (x=[2, 4), y = [1, 4)), (x=[7, 8), y = [1, 3))]
 ```
 which can be visualized as follows:
 <p align="center">
@@ -207,14 +207,17 @@ I.e. for the rectangle `(x=[0, 2), y=[1, 3))` this can be visualized as follows.
      │   │   │               │         │         │          │     │     │
      x   x   x            (-∞,0]     [0,2)     [2,+∞)      ()   [1,3)   ()
 ```
-The class `RPolygon` holds three data values to store its data.
+The class `RPolygon` used this model by holding three data structures.
   - `_x_boundaries`: Sorted list of necessary boundaries in x-dimension with type (`OPEN` or `CLOSED`)
   - `_used_y_ranges`: List of lists in a triangular shape representing the interval tree for the
                       space occupied by the rectilinear polygon.
   - `_free_y_ranges`: List of list in a triangular shape representing the interval tree of
                       for the space not occupied by the rectilinear polygon.
 
-I.e.
+Note that a separate data structure for the area outside the polygon is kept.
+This is done in order to be able to obtain the complement of a polygon efficiently.
+
+For the example shown above this is:
 ```python
 >>> poly = rp.rclosedopen(0, 2, 1, 3)
 >>> poly._x_boundaries
@@ -229,7 +232,7 @@ SortedList([(-inf, OPEN), (0, OPEN), (2, OPEN), (+inf, OPEN)])
  [(-inf,+inf)]]
 ```
 
-You can use the function `data_tree_to_string` as noted below to print the internal data structure:
+You can use the function `data_tree_to_string` as noted below to print the internal data structure in a tabular format:
 
 ```python
 >>> poly = rp.rclosedopen(0, 2, 1, 3)
