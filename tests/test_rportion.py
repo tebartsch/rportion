@@ -706,11 +706,11 @@ class TestRPolygonOperations(unittest.TestCase):
         poly = rempty()
         poly._add_atomic(closedopen(x1, x2), y_interval_1)
         poly._add_atomic(closedopen(x3, x4), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
+        self.assertListEqual(list(poly._maximal_atomic_x_rectangles()), [
             (closedopen(x1, x2), y_interval_1),
             (closedopen(x3, x4), y_interval_2)
         ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
+        self.assertListEqual(list((~poly)._maximal_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x3),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -724,13 +724,13 @@ class TestRPolygonOperations(unittest.TestCase):
         poly = rempty()
         poly._add_atomic(closedopen(x1, x3), y_interval_1)
         poly._add_atomic(closedopen(x2, x4), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
+        self.assertListEqual(list(poly._maximal_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1 & y_interval_2),
             (closedopen(x1, x3), y_interval_1),
             (closedopen(x2, x4), y_interval_2),
             (closedopen(x2, x3), y_interval_1 | y_interval_2)
         ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
+        self.assertListEqual(list((~poly)._maximal_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x2),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -743,11 +743,11 @@ class TestRPolygonOperations(unittest.TestCase):
         poly = rempty()
         poly._add_atomic(closedopen(x1, x4), y_interval_1)
         poly._add_atomic(closedopen(x2, x3), y_interval_2)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
+        self.assertListEqual(list(poly._maximal_atomic_x_rectangles()), [
             (closedopen(x1, x4), y_interval_1),
             (closedopen(x2, x3), y_interval_1 | y_interval_2),
         ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
+        self.assertListEqual(list((~poly)._maximal_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2)),
             (open(-P.inf, x2),
              Interval.from_atomic(~y_interval_1.right, y_interval_1.upper, P.inf, P.OPEN)),
@@ -777,7 +777,7 @@ class TestRPolygonOperations(unittest.TestCase):
         poly._add_atomic(closedopen(x1, x3), y_interval_1)
         poly._add_atomic(closedopen(x4, x6), y_interval_2)
         poly._add_atomic(closedopen(x2, x5), y_interval_3)
-        self.assertListEqual(list(poly._maximal_used_atomic_x_rectangles()), [
+        self.assertListEqual(list(poly._maximal_atomic_x_rectangles()), [
             (closedopen(x1, x5), closedopen(x4, x5)),
             (closedopen(x2, x6), closedopen(x2, x3)),
             (closedopen(x2, x5), closedopen(x2, x5)),
@@ -786,7 +786,7 @@ class TestRPolygonOperations(unittest.TestCase):
             (closedopen(x2, x3), closedopen(x2, x6)),
             (closedopen(x4, x5), closedopen(x1, x5)),
         ])
-        self.assertListEqual(list(poly._maximal_free_atomic_x_rectangles()), [
+        self.assertListEqual(list((~poly)._maximal_atomic_x_rectangles()), [
             (open(-P.inf, P.inf), ~(y_interval_1 | y_interval_2 | y_interval_3)),
             (open(-P.inf, x4),
              Interval.from_atomic(P.OPEN, -P.inf, y_interval_3.lower, ~y_interval_3.left)),
@@ -941,10 +941,13 @@ class TestIntervalTreeFunctions(unittest.TestCase):
         super(TestIntervalTreeFunctions, self).__init__(*args, **kwargs)
 
     def test__traverse_diagonally(self):
+        next_accumulator = lambda curr, l_parent, r_parent: curr | l_parent | r_parent
+        adj_y_interval = lambda curr, l_parent, r_parent: curr
+
         boundaries = [RBoundary(-P.inf, P.OPEN), RBoundary(P.inf, P.OPEN)]
         interval_tree = [[empty()]]
         with self.assertRaises(StopIteration):
-            next(_traverse_diagonally(boundaries, interval_tree))
+            next(_traverse_diagonally(boundaries, interval_tree, next_accumulator, adj_y_interval))
 
         boundaries = [RBoundary(-P.inf, P.OPEN), RBoundary(0, P.CLOSED),
                       RBoundary(1, P.OPEN), RBoundary(P.inf, P.OPEN)]
@@ -953,7 +956,7 @@ class TestIntervalTreeFunctions(unittest.TestCase):
             [empty(), open(0, 1)],
             [empty()]
         ]
-        iterator = _traverse_diagonally(boundaries, interval_tree)
+        iterator = _traverse_diagonally(boundaries, interval_tree, next_accumulator, adj_y_interval)
         self.assertEqual(next(iterator), (open(0, 1), open(0, 1)))
         with self.assertRaises(StopIteration):
             next(iterator)

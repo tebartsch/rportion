@@ -1,5 +1,5 @@
 from copy import copy
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Tuple, Callable
 
 import portion as P
 from portion.interval import Interval, open, empty, closedopen, closed, openclosed, singleton
@@ -291,30 +291,39 @@ def _update_x_boundaries_and_y_interval_triangles(
 
 
 def _traverse_diagonally(boundaries: List[RBoundary],
-                         interval_triangle: List[List[Interval]]) -> Iterator[Tuple[Interval, Interval]]:
+                         interval_triangle: List[List[Interval]],
+                         next_accumulator: Callable[[Interval, Interval, Interval], Interval],
+                         adj_y_interval: Callable[[Interval, Interval, Interval], Interval]
+                         ) -> Iterator[Tuple[Interval, Interval]]:
     """
-    Traverse self._free_y_ranges diagonally from the top left to obtain all maximal free rectangles.
+    Traverse `interval_triangle` diagonally from the top left and yield rectangles specified by the parameters
+    `asdf` and `next_accumulator`.
 
-    Therefore, the resulting tuple contains two *ATOMIC* intervals.
     The iterator *DOES NOT* return tuples where either the first or second interval is empty.
 
-    For each diagonal the results of the previous diagonals are stored to prevent returning rectangles which
-    are already contained in larger rectangles which have been returned before.
+    :param boundaries List[RBoundary]:
+    :param interval_triangle List[List[Interval]]:
+    :param next_accumulator Callable[[Interval, Interval, Interval], Interval]:
+        Function determining how to accumulate values while traversing. See explanation below.
+    :param adj_y_interval Callable[[Interval, Interval, Interval], Interval]:
+        Function determining which rectangles to return. See explanation below.
 
-    I.e. if we have boundaries
+    `interval_triangle` represents an interval tree of the form
 
-        [-inf, b1, b2, ..., bn, inf]
+                    ┌─x─┐
+                  ┌─x─┬─x─┐
+                ┌─x─┬─x─┬─x─┐
+                x   x   x   x
 
-    then we traverse interval_triangle like shown below.
+    where every node has two parents. `_traverse_diagonally` traverses this tree row by row to generate an
+    accumulator (`next_accumulator`) and a rectangle (`return_rectangle`) at every node.
 
-               | inf  bn  b(n-1)   ...     b1
-        -------+------------------------------
-          -inf |  1    3     6     ...    _16_/
-            b1 |  2    5     :       _15_/
-            b2 |  4    :     :  _14_/
-             : |  :    :   _13_/
-             : |  :   _12_/
-            bn |_11__/
+      - `next_accumulator`: use the previous accumulators of both parent nodes and the current node value
+                            to obtain an interval which is the accumulator of this node.
+      - `adj_y_interval`:   use the previous accumulators of both parent nodes and the current node value
+                            to obtain an adjusted y_interval..
+
+    All generated rectangles which are non-empty are returned.
     """
     n = len(interval_triangle)
     next_parent_y_intervals = [empty(), empty()]
@@ -324,8 +333,7 @@ def _traverse_diagonally(boundaries: List[RBoundary],
         for row, col in enumerate(range(start_row, -1, -1)):
             curr_y_int = interval_triangle[row][col]
 
-            adj_curr_y_int0 = _sub_contained_atomics(curr_y_int, parent_y_intervals[row])
-            adj_curr_y_int = _sub_contained_atomics(adj_curr_y_int0, parent_y_intervals[row + 1])
+            adj_curr_y_int = adj_y_interval(curr_y_int, parent_y_intervals[row], parent_y_intervals[row + 1])
 
             l_bound = ~boundaries[row]
             r_bound = boundaries[-col - 1]
@@ -334,9 +342,9 @@ def _traverse_diagonally(boundaries: List[RBoundary],
             if not curr_x_int.empty and not adj_curr_y_int.empty:
                 yield curr_x_int, adj_curr_y_int
 
-            next_parent_y_intervals.append(adj_curr_y_int
-                                           | parent_y_intervals[row]
-                                           | parent_y_intervals[row + 1])
+            next_parent_y_intervals.append(next_accumulator(curr_y_int,
+                                                            parent_y_intervals[row],
+                                                            parent_y_intervals[row + 1]))
         next_parent_y_intervals.append(empty())
 
 
@@ -533,7 +541,7 @@ class RPolygon:
         :return: Iterator[RPolygon]: iterator over maximal rectangles inside polygon
         """
         # We expect the intervals returned by `self._maximal_used_atomic_x_rectangles()` to be atomic.
-        for x_atom, y_interval in self._maximal_used_atomic_x_rectangles():
+        for x_atom, y_interval in self._maximal_atomic_x_rectangles():
             for y_atom in y_interval:
                 yield self.__class__.from_interval_product(x_atom, y_atom)
 
@@ -552,13 +560,13 @@ class RPolygon:
 
     def __or__(self, other: 'RPolygon') -> 'RPolygon':
         rec_copy = copy(self)
-        for x_interval, y_interval in other._maximal_used_atomic_x_rectangles():
+        for x_interval, y_interval in other._maximal_atomic_x_rectangles():
             rec_copy._add_interval_product(x_interval, y_interval)
         return rec_copy
 
     def __sub__(self, other: 'RPolygon') -> 'RPolygon':
         poly_copy = copy(self)
-        for x_interval, y_interval in other._maximal_used_atomic_x_rectangles():
+        for x_interval, y_interval in other._maximal_atomic_x_rectangles():
             poly_copy._sub_interval_product(x_interval, y_interval)
         return poly_copy
 
@@ -596,19 +604,16 @@ class RPolygon:
             string.append(f"(x={repr(x_int)}, y={repr(y_int)})")
         return " | ".join(string)
 
-    def _maximal_used_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
+    def _maximal_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
         """Traverse `self._used_y_ranges` to obtain the maximum contained rectangles.
 
         This function *MUST NOT* return tuples where either the first or the second interval is empty.
         """
-        return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges)
-
-    def _maximal_free_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
-        """Traverse `self._free_y_ranges` to obtain the maximum rectangles lying outside the polygon.
-
-        This function *MUST NOT* return tuples where either the first or the second interval is empty.
-        """
-        return _traverse_diagonally(list(self._x_boundaries), self._free_y_ranges)
+        def adj_y_interval(curr: Interval, l_parent: Interval, r_parent: Interval) -> Interval:
+            return _sub_contained_atomics(_sub_contained_atomics(curr, l_parent), r_parent)
+        return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges,
+                                    lambda curr, l_parent, r_parent: curr | l_parent | r_parent,
+                                    adj_y_interval)
 
     def _invert(self):
         temp = self._used_y_ranges
