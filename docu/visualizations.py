@@ -182,6 +182,7 @@ def plot_rectangles(ax: Axes,
                     rectangles: List[Tuple[int, int, int, int]],
                     color_ind: int,
                     label: str,
+                    linewidth: float,
                     alpha: float):
     cmap = get_cmap('Set3')
     flag = True
@@ -194,7 +195,7 @@ def plot_rectangles(ax: Axes,
         ax.add_patch(MplRectangle((x0, y0), x1 - x0, y1 - y0,
                                   facecolor=cmap(color_ind),
                                   edgecolor="black",
-                                  linewidth=0,
+                                  linewidth=linewidth,
                                   alpha=alpha,
                                   **kwargs))
 
@@ -208,30 +209,57 @@ def bounding_coords(rectangles: RPolygon):
         return x_int.lower, x_int.upper, y_int.lower, y_int.upper
 
 
-def plot_rpolygon(ax: Axes, poly: RPolygon,
-                  box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
-                  alpha: float = 0.35):
+def get_box(poly: RPolygon):
+    x_int = poly.x_enclosure_interval
+    y_int = poly.y_enclosure_interval
+    assert (x_int.lower != -P.inf and x_int.upper != P.inf
+            and y_int.lower != -P.inf and y_int.upper != P.inf), (
+        f"If parameter box == None the rectangle must be bounded. "
+        f"Boundaries are x = {x_int}, y = {y_int}")
+    x_extra = (x_int.upper - x_int.lower) // 10 + 2
+    y_extra = (y_int.upper - y_int.lower) // 10 + 2
+    box = ((x_int.lower - x_extra, x_int.upper + x_extra),
+           (y_int.lower - y_extra, y_int.upper + y_extra))
+
+    return box
+
+
+def plot_rpolygon_max_rectangles(ax: Axes, poly: RPolygon,
+                                 box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
+                                 alpha_used: float = 0.35,
+                                 alpha_free: float = 1):
     if box is None:
-        x_int = poly.x_enclosure_interval
-        y_int = poly.y_enclosure_interval
-        assert (x_int.lower != -P.inf and x_int.upper != P.inf
-                and y_int.lower != -P.inf and y_int.upper != P.inf), (
-            f"If parameter box == None the rectangle must be bounded. "
-            f"Boundaries are x = {x_int}, y = {y_int}")
-        x_extra = (x_int.upper - x_int.lower) // 10 + 2
-        y_extra = (y_int.upper - y_int.lower) // 10 + 2
-        box = ((x_int.lower - x_extra, x_int.upper + x_extra),
-               (y_int.lower - y_extra, y_int.upper + y_extra))
+        box = get_box(poly)
 
     ax.set_xlim(*box[0])
     ax.set_ylim(*box[1])
+
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_rectangles()]
-    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", alpha=alpha)
+    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", linewidth=0, alpha=alpha_used)
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in (~poly).maximal_rectangles()]
-    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", alpha=alpha)
+    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", linewidth=0, alpha=alpha_free)
+
+
+def plot_rpolygon_partitioning(ax: Axes, poly: RPolygon,
+                               box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
+                               linewidth_used=1, linewidth_free=0):
+
+    if box is None:
+        box = get_box(poly)
+
+    ax.set_xlim(*box[0])
+    ax.set_ylim(*box[1])
+
+    enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
+    free_coords = [bounding_coords(rec & enclosing_rec)
+                   for rec in (~poly).rectangle_partitioning()]
+    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", linewidth=linewidth_free, alpha=1.0)
+    used_coords = [bounding_coords(rec & enclosing_rec)
+                   for rec in poly.rectangle_partitioning()]
+    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", linewidth=linewidth_used, alpha=1.0)
 
 
 def create_gif():
@@ -246,7 +274,7 @@ def create_gif():
     x_lim = (0, 10)
     y_lim = (0, 5)
 
-    for name, alpha in [("solid", 1.0), ("transparent", 0.35)]:
+    for name, alpha in [("solid", 1.0), ("partitioning", 0.35)]:
 
         filename_base = f"simple-example_{name}"
         output_folder = "simple-example-images"
@@ -259,7 +287,7 @@ def create_gif():
                 poly |= r
             elif operation == "sub":
                 poly -= r
-            plot_rpolygon(ax, poly, (x_lim, y_lim), alpha)
+            plot_rpolygon_partitioning(ax, poly, (x_lim, y_lim), alpha)
             ax.set_xlim(x_lim)
             ax.set_ylim(y_lim)
             ax.spines['left'].set_visible(False)
@@ -268,7 +296,6 @@ def create_gif():
             ax.spines['top'].set_visible(False)
             ax.get_xaxis().set_ticks([])
             ax.get_yaxis().set_ticks([])
-            # ax.legend(loc="upper right")
             fig.savefig(os.path.join(output_folder, f"{filename_base}-{i}.png"),
                         bbox_inches='tight', pad_inches=0)
 
@@ -279,9 +306,15 @@ def create_gif():
                 writer.append_data(image)
 
         fig, axes = plt.subplots(1, 2, figsize=(11, 3))
-        plot_rpolygon(axes[0], poly, (x_lim, y_lim), 1.0)
-        plot_rpolygon(axes[1], poly, (x_lim, y_lim), 0.35)
-        fig.savefig(os.path.join(f"simple-example.png"),
+        plot_rpolygon_max_rectangles(axes[0], poly, (x_lim, y_lim), 1.0)
+        plot_rpolygon_max_rectangles(axes[1], poly, (x_lim, y_lim), 0.35)
+        fig.savefig(os.path.join(f"simple-example_max-rectangles.png"),
+                    bbox_inches='tight', pad_inches=0.1)
+
+        fig, axes = plt.subplots(1, 2, figsize=(11, 3))
+        plot_rpolygon_max_rectangles(axes[0], poly, (x_lim, y_lim), 1.0)
+        plot_rpolygon_partitioning(axes[1], poly, (x_lim, y_lim))
+        fig.savefig(os.path.join(f"simple-example_partitioning.png"),
                     bbox_inches='tight', pad_inches=0.1)
 
 
@@ -439,8 +472,8 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
 
         for i, (name, max_rectangles) in enumerate(max_rectangles_dict.items()):
             algo_axes[i].set_title(f"{name}")
-            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "polygon", 0.35)
-            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "complement", 0.35)
+            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "polygon", linewidth=0, alpha=0.35)
+            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "complement", linewidth=0, alpha=0.35)
             algo_axes[i].set_title(f"{name}")
             algo_axes[i].set_xlim(x_lim)
             algo_axes[i].set_ylim(y_lim)

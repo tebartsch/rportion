@@ -301,11 +301,11 @@ def _traverse_diagonally(boundaries: List[RBoundary],
 
     The iterator *DOES NOT* return tuples where either the first or second interval is empty.
 
-    :param boundaries List[RBoundary]:
-    :param interval_triangle List[List[Interval]]:
-    :param next_accumulator Callable[[Interval, Interval, Interval], Interval]:
+    :param boundaries: List[RBoundary]:
+    :param interval_triangle: List[List[Interval]]:
+    :param next_accumulator: Callable[[Interval, Interval, Interval], Interval]:
         Function determining how to accumulate values while traversing. See explanation below.
-    :param adj_y_interval Callable[[Interval, Interval, Interval], Interval]:
+    :param adj_y_interval: Callable[[Interval, Interval, Interval], Interval]:
         Function determining which rectangles to return. See explanation below.
 
     `interval_triangle` represents an interval tree of the form
@@ -532,6 +532,17 @@ class RPolygon:
         """
         return self - other
 
+    def rectangle_partitioning(self) -> Iterator['RPolygon']:
+        """
+        Yield a disjunctive set of rectangles covering the rectilinear polygon.
+
+        :return: Iterator[RPolygon]:
+        """
+        # We expect the x-intervals returned by `self._atomic_x_rectangle_partition()` to be atomic.
+        for x_atom, y_interval in self._atomic_x_rectangle_partitioning():
+            for y_atom in y_interval:
+                yield self.__class__.from_interval_product(x_atom, y_atom)
+
     def maximal_rectangles(self) -> Iterator['RPolygon']:
         """
         Yield all maximal rectangle uniquely which are contained in this polygon.
@@ -540,7 +551,7 @@ class RPolygon:
 
         :return: Iterator[RPolygon]: iterator over maximal rectangles inside polygon
         """
-        # We expect the intervals returned by `self._maximal_used_atomic_x_rectangles()` to be atomic.
+        # We expect the x-intervals returned by `self._maximal_used_atomic_x_rectangles()` to be atomic.
         for x_atom, y_interval in self._maximal_atomic_x_rectangles():
             for y_atom in y_interval:
                 yield self.__class__.from_interval_product(x_atom, y_atom)
@@ -560,13 +571,13 @@ class RPolygon:
 
     def __or__(self, other: 'RPolygon') -> 'RPolygon':
         rec_copy = copy(self)
-        for x_interval, y_interval in other._maximal_atomic_x_rectangles():
+        for x_interval, y_interval in other._atomic_x_rectangle_partitioning():
             rec_copy._add_interval_product(x_interval, y_interval)
         return rec_copy
 
     def __sub__(self, other: 'RPolygon') -> 'RPolygon':
         poly_copy = copy(self)
-        for x_interval, y_interval in other._maximal_atomic_x_rectangles():
+        for x_interval, y_interval in other._atomic_x_rectangle_partitioning():
             poly_copy._sub_interval_product(x_interval, y_interval)
         return poly_copy
 
@@ -604,6 +615,18 @@ class RPolygon:
             string.append(f"(x={repr(x_int)}, y={repr(y_int)})")
         return " | ".join(string)
 
+    def _atomic_x_rectangle_partitioning(self) -> Iterator[Tuple[Interval, Interval]]:
+        """Traverse `self._used_y_ranges` to obtain a rectangle partitioning of the polygon.
+
+        This function *MUST NOT* return tuples where either the first or the second interval is empty.
+        """
+        def adj_y_interval(curr: Interval, l_parent: Interval, r_parent: Interval) -> Interval:
+            return curr - l_parent - r_parent
+
+        return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges,
+                                    lambda curr, l_parent, r_parent: curr | l_parent | r_parent,
+                                    adj_y_interval)
+
     def _maximal_atomic_x_rectangles(self) -> Iterator[Tuple[Interval, Interval]]:
         """Traverse `self._used_y_ranges` to obtain the maximum contained rectangles.
 
@@ -611,6 +634,7 @@ class RPolygon:
         """
         def adj_y_interval(curr: Interval, l_parent: Interval, r_parent: Interval) -> Interval:
             return _sub_contained_atomics(_sub_contained_atomics(curr, l_parent), r_parent)
+
         return _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges,
                                     lambda curr, l_parent, r_parent: curr | l_parent | r_parent,
                                     adj_y_interval)

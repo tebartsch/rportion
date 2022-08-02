@@ -21,7 +21,7 @@ In the case of integers/floats it can be used to keep track of the area resultin
 from the union/difference of rectangles:
 
 <p align="center">
-  <img src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_solid.gif">
+  <img src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_partitioning.gif">
 </p>
 
 Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Interval_tree) to represent a polygon.
@@ -33,7 +33,8 @@ Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Int
       * [Polygon creation](#polygon-creation)
       * [Polygon bounds & attributes](#polygon-bounds--attributes)
       * [Polygon operations](#polygon-operations)
-      * [Maximum rectangle iterators](#maximum-rectangle-iterators)
+      * [Rectangle partitioning iterator](#rectangle-partitioning-iterator)
+      * [Maximum rectangle iterator](#maximum-rectangle-iterators)
       * [Internal data structure](#internal-data-structure)
   * [Changelog](#changelog)
   * [Contributions](#contributions)
@@ -163,25 +164,48 @@ An `RPolygon` defines the following properties
    in the polygon, see [Maximum rectangle iterators](#maximum-rectangle-iterators).
 
 [&uparrow; back to top](#table-of-contents)
-### Maximum rectangle iterators
+### Rectangle partitioning iterator
+
+The method `rectangle_partitioning` of a `RPolygon` instance returns an iterator
+over rectangles contained in the rectilinear polygon which disjunctively cover it. I.e.
+
+```python
+>>> poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
+>>> poly = poly - rp.rclosedopen(4, 7, 2, 4)
+>>> list(poly.rectangle_partitioning())
+[(x=[1,4), y=[2,3)), (x=[2,5), y=[1,2)), (x=[6,8), y=[1,2)), (x=[2,4), y=[3,4)), (x=[7,8), y=[2,3))]
+```
+
+which can be visualized as follows:
+<p align="center">
+  <img width="95%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_partitioning.png">
+</p>
+
+**Left:** Simple Rectilinear polygon. The red areas are part of the polygon.<br>
+**Right:** Rectangles in the portion are shown with black borderlines. As it is visible 
+           `rectangle_partitioning` prefers rectangles with long x-interval over 
+           rectangles with long y-interval.
+           
+
+
+[&uparrow; back to top](#table-of-contents)
+### Maximum rectangle iterator
 
 The method `maximal_rectangles` of a `RPolygon` instance returns an iterator over all maximal rectangles contained
 in the rectilinear polygon.
 
 A maximal rectangle is rectangle in the polygon which is not a real subset of any other rectangle contained in
-the rectilinear polygon.
-
-I.e. for the polygon
+the rectilinear polygon. I.e. 
 
 ```python
->> > poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
->> > poly = poly - rp.rclosedopen(4, 7, 2, 4)
->> > list(poly.maximal_rectangles())
+>>> poly = rp.rclosedopen(2, 5, 1, 4) | rp.rclosedopen(1, 8, 2, 3) | rp.rclosedopen(6, 8, 1, 3)
+>>> poly = poly - rp.rclosedopen(4, 7, 2, 4)
+>>> list(poly.maximal_rectangles())
 [(x=[1, 4), y = [2, 3)), (x=[2, 5), y = [1, 2)), (x=[6, 8), y = [1, 2)), (x=[2, 4), y = [1, 4)), (x=[7, 8), y = [1, 3))]
 ```
 which can be visualized as follows:
 <p align="center">
-  <img width="95%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example.png">
+  <img width="95%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_max-rectangles.png">
 </p>
 
 **Left:** Simple Rectilinear polygon. The red areas are part of the polygon.<br>

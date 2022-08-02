@@ -689,6 +689,20 @@ class TestRPolygonOperations(unittest.TestCase):
              RPolygon.from_interval_product(closedopen(0, 1), closed(0, 2))]
         )
 
+    def test_rectangle_partition(self):
+        x0, x1, x2, x3 = 0, 1, 2, 3
+        y0, y1, y2, y3 = 0, 1, 2, 3
+
+        poly = ropen(x0, x1, y0, y1)
+        self.assertListEqual(list(poly.rectangle_partitioning()),
+                             [ropen(x0, x1, y0, y1)])
+
+        poly = ropen(x0, x2, y0, y2) | ropen(x1, x3, y1, y3)
+        self.assertListEqual(list(poly.rectangle_partitioning()),
+                             [ropen(x0, x3, y1, y2),
+                              RPolygon.from_interval_product(open(x0, x2), openclosed(y0, y1)),
+                              RPolygon.from_interval_product(open(x1, x3), closedopen(y2, y3))])
+
     def test_maximal_atomic_x_rectangles(self):
         # Add two finite (in x dimension) polygons.
         #        (1)          (2)         (3)         (4)           (5)
