@@ -230,7 +230,9 @@ def get_box(poly: RPolygon):
 def plot_rpolygon_max_rectangles(ax: Axes, poly: RPolygon,
                                  box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
                                  alpha_used: float = 0.35,
-                                 alpha_free: float = 1):
+                                 alpha_free: float = 1,
+                                 plot_boundary: bool = True,
+                                 verbose=False):
     if box is None:
         box = get_box(poly)
 
@@ -239,12 +241,16 @@ def plot_rpolygon_max_rectangles(ax: Axes, poly: RPolygon,
 
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
     # Areas
+    if verbose:
+        print("plotting used areas")
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_rectangles()]
     plot_rectangles(ax, [e for e in used_coords if e is not None],
                     color_ind=3, label="polygon",
                     linewidth=0, linestyle=None,
                     alpha=alpha_used)
+    if verbose:
+        print("plotting free areas")
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in (~poly).maximal_rectangles()]
     plot_rectangles(ax, [e for e in free_coords if e is not None],
@@ -252,12 +258,15 @@ def plot_rpolygon_max_rectangles(ax: Axes, poly: RPolygon,
                     linewidth=0, linestyle=None,
                     alpha=alpha_free)
     # Boundary
-    boundary_coords = [bounding_coords(rec & enclosing_rec)
-                       for rec in poly.boundary().rectangle_partitioning()]
-    plot_rectangles(ax, [e for e in boundary_coords if e is not None],
-                    color_ind=0, label=None,
-                    linewidth=1, linestyle="-",
-                    alpha=1.0)
+    if plot_boundary:
+        if verbose:
+            print("plotting boundaries")
+        boundary_coords = [bounding_coords(rec & enclosing_rec)
+                           for rec in poly.boundary().rectangle_partitioning()]
+        plot_rectangles(ax, [e for e in boundary_coords if e is not None],
+                        color_ind=0, label=None,
+                        linewidth=1, linestyle="-",
+                        alpha=1.0)
 
 
 def plot_rpolygon_partitioning(ax: Axes, poly: RPolygon,

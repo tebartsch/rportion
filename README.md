@@ -21,7 +21,7 @@ In the case of integers/floats it can be used to keep track of the area resultin
 from the union/difference of rectangles:
 
 <p align="center">
-  <img src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_solid.gif">
+  <img width="65%" src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_solid.gif">
 </p>
 
 Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Interval_tree) to represent a polygon.
