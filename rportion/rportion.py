@@ -556,6 +556,39 @@ class RPolygon:
             for y_atom in y_interval:
                 yield self.__class__.from_interval_product(x_atom, y_atom)
 
+    def boundary(self) -> 'RPolygon':
+        """
+        Return the boundary of this polygon.
+
+        :return RPolygon: boundary of this polygon represented as another polygon
+        """
+        def adj_y_interval(curr: Interval, l_parent: Interval, r_parent: Interval) -> Interval:
+            return curr - l_parent - r_parent
+
+        iterator = _traverse_diagonally(list(self._x_boundaries), self._used_y_ranges,
+                                        lambda curr, l_parent, r_parent: curr | l_parent | r_parent,
+                                        adj_y_interval)
+        x_boundary_poly = rempty()
+        for x_atom, y_interval in iterator:
+            x_int = singleton(x_atom.lower) | singleton(x_atom.upper)
+            x_boundary_poly |= self.__class__.from_interval_product(x_int, y_interval)
+
+        # Traverse the leafs of the interval tree
+        y_boundary_poly = rempty()
+        n = len(self._used_y_ranges)
+        for i in range(n):
+            row = i
+            col = n - i - 1
+            l_bound = ~self._x_boundaries[i]
+            r_bound = self._x_boundaries[i+1]
+            x_int = closed(l_bound.val, r_bound.val)
+            leaf_y_int = self._used_y_ranges[row][col]
+            for y_atom in leaf_y_int:
+                y_int = singleton(y_atom.lower) | singleton(y_atom.upper)
+                y_boundary_poly |= self.__class__.from_interval_product(x_int, y_int)
+
+        return x_boundary_poly | y_boundary_poly
+
     def __copy__(self):
         poly_copy = self.__class__()
         poly_copy._x_boundaries = SortedList(copy(b) for b in self._x_boundaries)
@@ -699,6 +732,17 @@ def rsingleton(x, y) -> RPolygon:
     :return RPolygon:
     """
     return RPolygon.from_interval_product(singleton(x), singleton(y))
+
+
+def rproduct(x_interval: Interval, y_interval: Interval):
+    """
+    Create a polygon as the (cartesian) product of two intervals.
+
+    :param x_interval: x-interval of the cartesian product
+    :param y_interval: y-interval of the cartesian product
+    :return RPolygon:
+    """
+    return RPolygon.from_interval_product(x_interval, y_interval)
 
 
 def ropen(x_lower, x_upper, y_lower, y_upper) -> RPolygon:

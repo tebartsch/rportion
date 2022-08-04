@@ -9,7 +9,7 @@ from portion.interval import open, closedopen, empty, Interval, singleton, openc
 from typing import List, Set, Tuple
 from rportion import RPolygon
 from rportion.rportion import ropen, rclosedopen, rclosed, rempty, RBoundary, rsingleton, ropenclosed, \
-    _traverse_diagonally
+    _traverse_diagonally, rproduct
 
 from tests.helpers import get_maximal_rectangles_from_numpy
 
@@ -100,7 +100,6 @@ class TestRBoundary(unittest.TestCase):
         self.assertEqual(RBoundary(1, P.CLOSED), RBoundary(1, P.CLOSED))
 
     def test_le(self):
-
         self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(0, P.OPEN))
         self.assertTrue(RBoundary(0, P.OPEN) <= RBoundary(0, P.CLOSED))
         self.assertFalse(RBoundary(0, P.CLOSED) <= RBoundary(0, P.OPEN))
@@ -122,7 +121,6 @@ class TestRBoundary(unittest.TestCase):
         self.assertTrue(RBoundary(1, P.CLOSED) <= RBoundary(1, P.CLOSED))
 
     def test_lt(self):
-
         self.assertFalse(RBoundary(0, P.OPEN) < RBoundary(0, P.OPEN))
         self.assertTrue(RBoundary(0, P.OPEN) < RBoundary(0, P.CLOSED))
         self.assertFalse(RBoundary(0, P.CLOSED) < RBoundary(0, P.OPEN))
@@ -165,7 +163,6 @@ class TestRBoundary(unittest.TestCase):
         self.assertTrue(RBoundary(1, P.CLOSED) >= RBoundary(1, P.CLOSED))
 
     def test_gt(self):
-
         self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(0, P.OPEN))
         self.assertFalse(RBoundary(0, P.OPEN) > RBoundary(0, P.CLOSED))
         self.assertTrue(RBoundary(0, P.CLOSED) > RBoundary(0, P.OPEN))
@@ -949,6 +946,55 @@ class TestRPolygonOperations(unittest.TestCase):
             print("Tested maximal rectangle calculation for the following polygon.")
             print(matrix_to_str(arr))
 
+    def test_boundary(self):
+        # Single rectangle
+        #     +--+
+        #     |  |
+        #     +--+
+        x0, x1 = 0, 2
+        y0, y1 = 1, 3
+        for constructor in [rclosed, ropen, rclosedopen, ropenclosed]:
+            poly = constructor(x0, x1, y0, y1)
+            self.assertEqual(poly.boundary(),
+                             rproduct(closed(x0, x1), singleton(y0) | singleton(y1))
+                             | rproduct(singleton(x0) | singleton(x1), closed(y0, y1)))
+
+        # Two overlapping rectangles
+        #        +--+
+        #        |+-|+
+        #        +|-+|
+        #         +--+
+        x0, x1, x2, x3 = 0, 1, 2, 3
+        y0, y1, y2, y3 = 4, 5, 6, 7
+        for constructor in [rclosed, ropen, rclosedopen, ropenclosed]:
+            poly = constructor(x0, x2, y0, y2) | constructor(x1, x3, y1, y3)
+            self.assertEqual(poly.boundary(),
+                             rproduct(singleton(x0), closed(y0, y2))
+                             | rproduct(closed(x0, x1), singleton(y2))
+                             | rproduct(singleton(x1), closed(y2, y3))
+                             | rproduct(closed(x1, x3), singleton(y3))
+                             | rproduct(singleton(x3), closed(y1, y3))
+                             | rproduct(closed(x2, x3), singleton(y1))
+                             | rproduct(singleton(x2), closed(y0, y1))
+                             | rproduct(closed(x0, x2), singleton(y0)))
+
+        # Rectangle with a hole
+        #       +------+
+        #       | +--+ |
+        #       | |  | |
+        #       | +--+ |
+        #       +------+
+        x0, x1, x2, x3 = 0, 1, 2, 3
+        y0, y1, y2, y3 = 4, 5, 6, 7
+        for constructor in [rclosed, ropen, rclosedopen, ropenclosed]:
+            poly = constructor(x0, x3, y0, y3)
+            poly -= constructor(x1, x2, y1, y2)
+            self.assertEqual(poly.boundary(),
+                             rproduct(closed(x0, x3), singleton(y0) | singleton(y3))
+                             | rproduct(singleton(x0) | singleton(x3), closed(y0, y3))
+                             | rproduct(closed(x1, x2), singleton(y1) | singleton(y2))
+                             | rproduct(singleton(x1) | singleton(x2), closed(y1, y2)))
+
 
 class TestIntervalTreeFunctions(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -974,4 +1020,3 @@ class TestIntervalTreeFunctions(unittest.TestCase):
         self.assertEqual(next(iterator), (open(0, 1), open(0, 1)))
         with self.assertRaises(StopIteration):
             next(iterator)
-

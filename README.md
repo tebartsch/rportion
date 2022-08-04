@@ -21,7 +21,7 @@ In the case of integers/floats it can be used to keep track of the area resultin
 from the union/difference of rectangles:
 
 <p align="center">
-  <img src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_partitioning.gif">
+  <img src="https://github.com/tilmann-bartsch/rportion/raw/master/docu/simple-example_solid.gif">
 </p>
 
 Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Interval_tree) to represent a polygon.
@@ -35,6 +35,7 @@ Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Int
       * [Polygon operations](#polygon-operations)
       * [Rectangle partitioning iterator](#rectangle-partitioning-iterator)
       * [Maximum rectangle iterator](#maximum-rectangle-iterators)
+      * [Boundary](#boundary)
       * [Internal data structure](#internal-data-structure)
   * [Changelog](#changelog)
   * [Contributions](#contributions)
@@ -209,8 +210,19 @@ which can be visualized as follows:
 </p>
 
 **Left:** Simple Rectilinear polygon. The red areas are part of the polygon.<br>
-**Right:** Maximal contained rectangles are drawn above each other transparently. The maximum
-              rectangles lying outside the polygon are represented analogously in green.
+**Right:** Maximal contained rectangles are drawn above each other transparently.
+
+[&uparrow; back to top](#table-of-contents)
+## Boundary
+
+The method `boundary` of a `RPolygon` instance returns another `RPolygon` instance representing the boundary of
+the polygon. I.e.
+
+```python
+>>> poly = rp.closed(0, 1, 2, 3)
+>>> poly.boundary()
+(x=[1,2], y=[3]) | (x=[1,2], y=[4]) | (x=[1], y=[3,4]) | (x=[2], y=[3,4])
+```
 
 [&uparrow; back to top](#table-of-contents)
 ## Internal data structure

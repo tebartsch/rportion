@@ -181,8 +181,9 @@ def get_maximal_rectangles_from_numpy(occupation_mat: np.ndarray, mode: str):
 def plot_rectangles(ax: Axes,
                     rectangles: List[Tuple[int, int, int, int]],
                     color_ind: int,
-                    label: str,
+                    label: Optional[str],
                     linewidth: float,
+                    linestyle: object,
                     alpha: float):
     cmap = get_cmap('Set3')
     flag = True
@@ -196,7 +197,9 @@ def plot_rectangles(ax: Axes,
                                   facecolor=cmap(color_ind),
                                   edgecolor="black",
                                   linewidth=linewidth,
+                                  linestyle=linestyle,
                                   alpha=alpha,
+
                                   **kwargs))
 
 
@@ -235,18 +238,33 @@ def plot_rpolygon_max_rectangles(ax: Axes, poly: RPolygon,
     ax.set_ylim(*box[1])
 
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
+    # Areas
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.maximal_rectangles()]
-    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", linewidth=0, alpha=alpha_used)
+    plot_rectangles(ax, [e for e in used_coords if e is not None],
+                    color_ind=3, label="polygon",
+                    linewidth=0, linestyle=None,
+                    alpha=alpha_used)
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in (~poly).maximal_rectangles()]
-    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", linewidth=0, alpha=alpha_free)
+    plot_rectangles(ax, [e for e in free_coords if e is not None],
+                    color_ind=0, label="complement",
+                    linewidth=0, linestyle=None,
+                    alpha=alpha_free)
+    # Boundary
+    boundary_coords = [bounding_coords(rec & enclosing_rec)
+                       for rec in poly.boundary().rectangle_partitioning()]
+    plot_rectangles(ax, [e for e in boundary_coords if e is not None],
+                    color_ind=0, label=None,
+                    linewidth=1, linestyle="-",
+                    alpha=1.0)
 
 
 def plot_rpolygon_partitioning(ax: Axes, poly: RPolygon,
                                box: Optional[Tuple[Tuple[int, int], Tuple[int, int]]],
-                               linewidth_used=1, linewidth_free=0):
-
+                               used_linewidth: float = 0.5,
+                               free_linewidth: float = 0.0,
+                               border_linewidth: float = 1.0):
     if box is None:
         box = get_box(poly)
 
@@ -254,12 +272,26 @@ def plot_rpolygon_partitioning(ax: Axes, poly: RPolygon,
     ax.set_ylim(*box[1])
 
     enclosing_rec = rclosed(box[0][0], box[0][1], box[1][0], box[1][1])
+    # Areas
     free_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in (~poly).rectangle_partitioning()]
-    plot_rectangles(ax, [e for e in free_coords if e is not None], 0, "complement", linewidth=linewidth_free, alpha=1.0)
+    plot_rectangles(ax, [e for e in free_coords if e is not None],
+                    color_ind=0, label="complement",
+                    linewidth=free_linewidth, linestyle="--",
+                    alpha=1.0)
     used_coords = [bounding_coords(rec & enclosing_rec)
                    for rec in poly.rectangle_partitioning()]
-    plot_rectangles(ax, [e for e in used_coords if e is not None], 3, "polygon", linewidth=linewidth_used, alpha=1.0)
+    plot_rectangles(ax, [e for e in used_coords if e is not None],
+                    color_ind=3, label="polygon",
+                    linewidth=used_linewidth, linestyle="--",
+                    alpha=1.0)
+    # Boundary
+    boundary_coords = [bounding_coords(rec & enclosing_rec)
+                       for rec in poly.boundary().rectangle_partitioning()]
+    plot_rectangles(ax, [e for e in boundary_coords if e is not None],
+                    color_ind=0, label=None,
+                    linewidth=border_linewidth, linestyle="-",
+                    alpha=1.0)
 
 
 def create_gif():
@@ -274,7 +306,7 @@ def create_gif():
     x_lim = (0, 10)
     y_lim = (0, 5)
 
-    for name, alpha in [("solid", 1.0), ("partitioning", 0.35)]:
+    for name, alpha in [("solid", 1.0), ("max-rectangles", 0.35)]:
 
         filename_base = f"simple-example_{name}"
         output_folder = "simple-example-images"
@@ -282,12 +314,12 @@ def create_gif():
 
         poly = RPolygon()
         for i, (operation, r) in enumerate(r_list):
-            fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+            fig, ax = plt.subplots(1, 1, figsize=(10, 5))
             if operation == "add":
                 poly |= r
             elif operation == "sub":
                 poly -= r
-            plot_rpolygon_partitioning(ax, poly, (x_lim, y_lim), alpha)
+            plot_rpolygon_max_rectangles(ax, poly, (x_lim, y_lim), alpha_used=alpha)
             ax.set_xlim(x_lim)
             ax.set_ylim(y_lim)
             ax.spines['left'].set_visible(False)
@@ -472,8 +504,10 @@ def evaluate_random_polygon(save_image=True, show_progress=True):
 
         for i, (name, max_rectangles) in enumerate(max_rectangles_dict.items()):
             algo_axes[i].set_title(f"{name}")
-            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "polygon", linewidth=0, alpha=0.35)
-            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "complement", linewidth=0, alpha=0.35)
+            plot_rectangles(algo_axes[i], max_rectangles[0], 3, "polygon",
+                            linewidth=0, linestyle=None, alpha=0.35)
+            plot_rectangles(algo_axes[i], max_rectangles[1], 0, "complement",
+                            linewidth=0, linestyle=None, alpha=0.35)
             algo_axes[i].set_title(f"{name}")
             algo_axes[i].set_xlim(x_lim)
             algo_axes[i].set_ylim(y_lim)
