@@ -35,7 +35,7 @@ setup(
         "test": ["pytest ~= 7.0",
                  "coverage ~= 6.0",
                  "numpy ~= 1.21.6"],
-        "docu": ["numpy ~= 1.21.6"
+        "docu": ["numpy ~= 1.21.6",
                  "matplotlib ~= 3.5.2",
                  "imageio ~= 2.19.5",
                  "pillow ~= 9.2.0",
