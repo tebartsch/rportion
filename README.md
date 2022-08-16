@@ -1,7 +1,7 @@
 # rportion - data structure and operations for rectilinear polygons
 
 
-[![PyPI pyversions](https://img.shields.io/pypi/pyversions/pytest-codeblocks.svg?branch=master)](https://test.pypi.org/project/rportion/)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/rportion)](https://pypi.org/project/rportion/)
 [![Tests](https://github.com/tilmann-bartsch/rportion/actions/workflows/test.yaml/badge.svg?branch=master)](https://github.com/tilmann-bartsch/portion/actions/workflows/test.yaml)
 [![Coverage Status](https://coveralls.io/repos/github/tilmann-bartsch/rportion/badge.svg?branch=master)](https://coveralls.io/github/tilmann-bartsch/rportion?branch=master)
 [![LGTM](https://img.shields.io/lgtm/grade/python/github/tilmann-bartsch/rportion.svg?branch=master)](https://lgtm.com/projects/g/tilmann-bartsch/rportion)
