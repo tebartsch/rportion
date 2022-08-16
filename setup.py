@@ -9,7 +9,7 @@ with open(
 
 setup(
     name="rportion",
-    version="0.0.2",
+    version="0.1.0",
     license="MIT",
     author="Tilmann Bartsch",
     url="https://github.com/tilmann-bartsch/rportion",
