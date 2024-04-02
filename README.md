@@ -8,7 +8,7 @@
 [![Commits](https://img.shields.io/github/last-commit/tilmann-bartsch/rportion/master)](https://github.com/tilmann-bartsch/rportion/commits/master)
 
 The `rportion` library provides data structure to represent 
-2D [rectilinear polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon) (unions of 2D-intervals) in Python 3.7+.
+2D [rectilinear polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon) (unions of 2D-intervals) in Python 3.9+.
 It is built upon the library [`portion`](https://github.com/AlexandreDecan/portion) and follows its concepts.
 The following features are provided:
 
@@ -54,6 +54,8 @@ Alternatively, clone the repository and run
 pip install -e ".[test]"
 python -m unittest discover -s tests
 ```
+
+Note that `python
 
 ## Documentation & usage
 

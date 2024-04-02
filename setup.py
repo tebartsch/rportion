@@ -9,7 +9,7 @@ with open(
 
 setup(
     name="rportion",
-    version="0.1.0",
+    version="0.2.0",
     license="MIT",
     author="Tilmann Bartsch",
     url="https://github.com/tilmann-bartsch/rportion",
@@ -27,15 +27,15 @@ setup(
     ],
     keywords="rectangle polygon interval-tree",
     packages=find_packages(include=["rportion"]),
-    python_requires="~= 3.7",
+    python_requires=">=3.9",
     install_requires=[
-        "sortedcontainers ~= 2.2", "portion ~= 2.2.0"
+        "sortedcontainers ~= 2.2", "portion ~= 2.4.2"
     ],
     extras_require={
         "test": ["pytest ~= 7.0",
                  "coverage ~= 6.0",
-                 "numpy ~= 1.21.6"],
-        "docu": ["numpy ~= 1.21.6",
+                 "numpy ~= 1.26.4"],
+        "docu": ["numpy ~= 1.26.4",
                  "matplotlib ~= 3.5.2",
                  "imageio ~= 2.19.5",
                  "pillow ~= 9.2.0",
