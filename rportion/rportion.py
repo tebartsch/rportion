@@ -295,8 +295,8 @@ def _traverse_diagonally(boundaries: List[RBoundary],
                          adj_y_interval: Callable[[P.Interval, P.Interval, P.Interval], P.Interval]
                          ) -> Iterator[Tuple[P.Interval, P.Interval]]:
     """
-    Traverse `interval_triangle` diagonally from the top left and yield rectangles specified by the parameters
-    `asdf` and `next_accumulator`.
+    Traverse `interval_triangle` for the given `boundaries` diagonally from the top left and yield rectangles
+    as specified by the parameters `next_accumulator` and `adj_y_interval`.
 
     The iterator *DOES NOT* return tuples where either the first or second interval is empty.
 
