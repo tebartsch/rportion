@@ -4,7 +4,6 @@
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/rportion)](https://pypi.org/project/rportion/)
 [![Tests](https://github.com/tilmann-bartsch/rportion/actions/workflows/test.yaml/badge.svg?branch=master)](https://github.com/tilmann-bartsch/portion/actions/workflows/test.yaml)
 [![Coverage Status](https://coveralls.io/repos/github/tilmann-bartsch/rportion/badge.svg?branch=master)](https://coveralls.io/github/tilmann-bartsch/rportion?branch=master)
-[![LGTM](https://img.shields.io/lgtm/grade/python/github/tilmann-bartsch/rportion.svg?branch=master)](https://lgtm.com/projects/g/tilmann-bartsch/rportion)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Commits](https://img.shields.io/github/last-commit/tilmann-bartsch/rportion/master)](https://github.com/tilmann-bartsch/rportion/commits/master)
 
@@ -34,7 +33,7 @@ Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Int
       * [Polygon bounds & attributes](#polygon-bounds--attributes)
       * [Polygon operations](#polygon-operations)
       * [Rectangle partitioning iterator](#rectangle-partitioning-iterator)
-      * [Maximum rectangle iterator](#maximum-rectangle-iterators)
+      * [Maximum rectangle iterator](#maximum-rectangle-iterator)
       * [Boundary](#boundary)
       * [Internal data structure](#internal-data-structure)
   * [Changelog](#changelog)
@@ -43,10 +42,18 @@ Internally the library uses an [interval tree](https://en.wikipedia.org/wiki/Int
 
 ## Installation
 
-Install `rportion` from [PyPi-test](https://test.pypi.org/project/rportion/) with `pip` using 
-`pip install -i https://test.pypi.org/simple/ rportion`.
+`rportion` can be installed from [PyPi](https://pypi.org/project/rportion/) with `pip` using 
 
-Install `rportion` with the development environment using `pip install -e ".[test]"`.
+```bash
+pip install rportion
+```
+
+Alternatively, clone the repository and run
+
+```bash
+pip install -e ".[test]"
+python -m unittest discover -s tests
+```
 
 ## Documentation & usage
 
@@ -136,6 +143,8 @@ An `RPolygon` defines the following properties
     (CLOSED, OPEN, CLOSED, OPEN)
     ```
 
+
+[&uparrow; back to top](#table-of-contents)
 ### Polygon operations
 
 `RPolygon` instances support the following operations:
