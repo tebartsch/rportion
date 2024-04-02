@@ -55,8 +55,6 @@ pip install -e ".[test]"
 python -m unittest discover -s tests
 ```
 
-Note that `python
-
 ## Documentation & usage
 
 ### Polygon creation
